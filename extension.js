@@ -33,6 +33,49 @@ function activate(context) {
     return getState('tasks', null);
   }
 
+  async function triggerAiChat(prompt, lang) {
+    if (prompt) {
+      try {
+        await vscode.env.clipboard.writeText(prompt);
+      } catch (_) {}
+    }
+
+    const chatCommands = [
+      { cmd: 'workbench.action.chat.open', args: prompt ? { query: prompt } : undefined },
+      { cmd: 'workbench.action.quickchat.open', args: prompt ? { query: prompt } : undefined },
+      { cmd: 'antigravity.chat.focus' },
+      { cmd: 'google.gemini.chat.focus' },
+      { cmd: 'claude.focus' },
+      { cmd: 'claude.openChat' },
+      { cmd: 'claude-dev.SidebarProvider.focus' },
+      { cmd: 'continue.focusContinueInputView' },
+      { cmd: 'workbench.panel.chat.view.copilot.focus' }
+    ];
+
+    let opened = false;
+    for (const item of chatCommands) {
+      try {
+        if (item.args) {
+          await vscode.commands.executeCommand(item.cmd, item.args);
+        } else {
+          await vscode.commands.executeCommand(item.cmd);
+        }
+        opened = true;
+        break;
+      } catch (_) {}
+    }
+
+    const msg = lang === 'es'
+      ? (opened
+          ? 'Chat abierto y prompt copiado. Si no ves el texto, pegalo con Cmd+V / Ctrl+V.'
+          : 'Prompt copiado al portapapeles. Pegalo (Cmd+V / Ctrl+V) en tu asistente de IA (Claude, Copilot o Antigravity).')
+      : (opened
+          ? 'Chat opened & prompt copied. If input is empty, paste with Cmd+V / Ctrl+V.'
+          : 'Prompt copied to clipboard. Paste (Cmd+V / Ctrl+V) in your AI assistant (Claude, Copilot or Antigravity).');
+
+    vscode.window.showInformationMessage(msg);
+  }
+
   function openMain(ticketId) {
     vscode.commands.executeCommand('workbench.action.closeSidebar');
     if (mainPanel) {
@@ -73,16 +116,39 @@ function activate(context) {
             }
           }
           break;
+        case 'startAiChat':
         case 'syncWithAI':
-          try {
-            await vscode.commands.executeCommand('workbench.action.chat.open', { query: msg.prompt });
-          } catch (_) {
-            vscode.window.showInformationMessage('Product Studio: Context sent to AI.');
-          }
+          await triggerAiChat(msg.prompt, lang);
           break;
         case 'copyPrompt':
           await vscode.env.clipboard.writeText(msg.text);
-          vscode.window.showInformationMessage(lang === 'es' ? 'Prompt copiado. Pegalo en tu chat de IA.' : 'Prompt copied. Paste in your AI chat.');
+          await triggerAiChat(msg.text, lang);
+          break;
+        case 'pickEvidenceFiles':
+          const files = await vscode.window.showOpenDialog({
+            canSelectMany: true,
+            openLabel: lang === 'es' ? 'Adjuntar evidencia' : 'Attach evidence',
+            filters: {
+              [lang === 'es' ? 'Imágenes' : 'Images']: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg']
+            }
+          });
+          if (files && files.length > 0) {
+            const names = files.map(f => {
+              const parts = f.fsPath.split('/');
+              return parts[parts.length - 1];
+            });
+            mainPanel.webview.postMessage({ type: 'evidenceSelected', fileNames: names });
+            vscode.window.showInformationMessage(
+              lang === 'es'
+                ? `${names.length} archivo(s) adjuntado(s) como evidencia a Jira (${msg.ticketId}).`
+                : `${names.length} file(s) attached as evidence to Jira (${msg.ticketId}).`
+            );
+          }
+          break;
+        case 'runTerminalTests':
+          const terminal = vscode.window.activeTerminal || vscode.window.createTerminal('Product Studio: Tests');
+          terminal.show();
+          terminal.sendText('npm test || echo "Running tests..."');
           break;
         case 'attachEvidence':
           vscode.window.showInformationMessage(`Product Studio: Evidence attached to Jira (${msg.ticketId}).`);
@@ -618,17 +684,38 @@ function rSC(){
 
   if(cS===1){
     let fig='';if(tk.figma)fig='<div class="card card-bg" style="padding:0;overflow:hidden"><div style="padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px">'+lg.Figma+'<strong>'+t('fig')+'</strong></div><div style="padding:12px;display:flex;justify-content:center;background:#1a1a20"><div style="width:100%;max-width:320px;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.3)"><div style="background:#f1f5f9;padding:6px 8px;font-size:11px;color:#64748b;font-weight:700">Mockup</div><div style="padding:8px;display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;font-weight:700;color:#0f172a">'+(L==='es'?'Historial':'History')+'</span><div style="border:1px solid #93c5fd;border-radius:4px;padding:3px 6px;background:#eff6ff;font-size:10px;color:#2563eb;font-weight:600">'+(L==='es'?'7 dias':'7 days')+'</div></div></div></div></div>';
-    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 1</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+ti+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+(sp?(L==='es'?'Ticket de investigacion. Lee el objetivo.':'Investigation ticket. Read the objective.'):(L==='es'?'Lee los detalles y pedi a la IA que empiece.':'Read the details and ask the AI to start.'))+'</p><div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+t(sp?'spO':'wh')+'</div><p style="font-size:13px;line-height:1.5">'+de+'</p></div>'+fig+'<div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+t(sp?'spD':'crit')+'</div><div style="display:flex;flex-direction:column;gap:6px">'+cr.map(x=>'<div style="display:flex;align-items:center;gap:8px;font-size:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-descriptionForeground)" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'+x+'</div>').join('')+'</div></div><button class="bp" onclick="goS(2)">'+svgChat+' '+t(sp?'askSp':'askAI')+'</button><p style="text-align:center;font-size:11px;color:var(--vscode-descriptionForeground);margin-top:6px">'+t('aiH')+'</p>';
+    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 1</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+ti+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+(sp?(L==='es'?'Ticket de investigacion. Lee el objetivo.':'Investigation ticket. Read the objective.'):(L==='es'?'Lee los detalles y pedi a la IA que empiece.':'Read the details and ask the AI to start.'))+'</p><div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+t(sp?'spO':'wh')+'</div><p style="font-size:13px;line-height:1.5">'+de+'</p></div>'+fig+'<div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+t(sp?'spD':'crit')+'</div><div style="display:flex;flex-direction:column;gap:6px">'+cr.map(x=>'<div style="display:flex;align-items:center;gap:8px;font-size:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-descriptionForeground)" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'+x+'</div>').join('')+'</div></div><button class="bp" onclick="startAiWithTicket()">'+svgChat+' '+t(sp?'askSp':'askAI')+'</button><p style="text-align:center;font-size:11px;color:var(--vscode-descriptionForeground);margin-top:6px">'+t('aiH')+'</p>';
   }
   else if(cS===2){
-    const pr=sp?(L==='es'?['Investiga opciones y compara','Arma tabla comparativa','Que ventajas y desventajas tiene cada opcion?']:['Investigate options and compare','Create a comparison table','What are the pros and cons of each?']):(L==='es'?['Implementa '+aTk+' segun los criterios','Explicame que vas a hacer','Genera tests automaticos']:['Implement '+aTk+' per the criteria','Explain what you will do','Generate automated tests']);
-    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 2</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t(sp?'iAI':'wAI')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('clCp')+'</p><div class="card" style="border-color:rgba(59,130,246,.3);background:rgba(59,130,246,.05);margin-bottom:14px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'+svgCheck+'<span style="font-weight:600;color:#60a5fa;font-size:12px">'+t('ctxS')+'</span></div><p style="font-size:12px;color:var(--vscode-descriptionForeground)">'+aTk+' — '+cr.length+' criteria</p></div><div style="font-size:12px;font-weight:600;color:var(--vscode-descriptionForeground);margin-bottom:6px">'+t('sugL')+'</div>'+pr.map(p=>'<button class="pb" onclick="cpP(this,\''+p.replace(/'/g,"\\'")+'\')"><span>'+p+'</span>'+svgCopy+'</button>').join('')+'<div style="margin-top:8px"><button class="bp" onclick="goS(3)">'+svgCheck+' '+(sp?t('aiDD'):t('aiDT'))+'</button></div>';
+    const fullPrompt = buildTicketPrompt(tk, aTk);
+    const pr=sp?(L==='es'?['Investiga opciones y compara alternativas','Arma una tabla comparativa con pros y contras','Cual es la recomendacion final para arquitectura?']:['Investigate options and compare alternatives','Create a comparison table with pros and cons','What is the final architectural recommendation?']):(L==='es'?['Genera los tests automaticos para estos criterios','Explicame los archivos que modificaste','Como pruebo este cambio en localhost?']:['Generate automated tests for these criteria','Explain the files you modified','How do I test this change on localhost?']);
+
+    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 2</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t(sp?'iAI':'wAI')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+(L==='es'?'El contexto fue copiado. Pegalo con Cmd+V o Ctrl+V en tu chat.':'Context was copied. Paste with Cmd+V or Ctrl+V in your chat.')+'</p>'+
+    '<div class="card" style="border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05);margin-bottom:12px">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'+
+        '<div style="display:flex;align-items:center;gap:6px;font-weight:600;color:#10b981;font-size:12px">'+svgCheck+'<span>'+(L==='es'?'Prompt copiado y listo':'Prompt copied and ready')+'</span></div>'+
+        '<button class="bs" style="width:auto;padding:3px 8px;font-size:11px" onclick="reopenChat()">'+svgChat+' '+(L==='es'?'Reabrir chat':'Reopen chat')+'</button>'+
+      '</div>'+
+      '<p style="font-size:11px;color:var(--vscode-descriptionForeground)">'+aTk+' — '+cr.length+' '+(L==='es'?'criterios incluidos':'criteria included')+'</p>'+
+    '</div>'+
+
+    '<div class="card card-bg" style="margin-bottom:14px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+        '<div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin:0">'+(L==='es'?'Prompt para tu asistente':'Prompt for your assistant')+'</div>'+
+        '<button class="bs" style="width:auto;padding:3px 8px;font-size:11px" onclick="cpFullPrompt()">'+svgCopy+' '+(L==='es'?'Copiar de nuevo':'Copy again')+'</button>'+
+      '</div>'+
+      '<div style="background:var(--vscode-input-background);border:1px solid var(--vscode-input-border);border-radius:6px;padding:8px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto;color:var(--vscode-input-foreground);line-height:1.4" id="fullPromptBox">'+fullPrompt.replace(/</g,'&lt;')+'</div>'+
+    '</div>'+
+
+    '<div style="font-size:12px;font-weight:600;color:var(--vscode-descriptionForeground);margin-bottom:6px">'+t('sugL')+'</div>'+
+    pr.map(p=>'<button class="pb" onclick="cpP(this,\''+p.replace(/'/g,"\\'")+'\')"><span>'+p+'</span>'+svgCopy+'</button>').join('')+
+    '<div style="margin-top:14px"><button class="bp" onclick="goS(3)">'+svgCheck+' '+(sp?t('aiDD'):t('aiDT'))+'</button></div>';
   }
   else if(cS===3&&sp){
     c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 3</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('docT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('docS')+'</p><div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"><button class="pb" onclick="toast(\'Creating...\')">'+lg.Confluence+'<span style="flex:1;text-align:left">'+t('cConf')+'</span></button><button class="pb" onclick="toast(\'Creating...\')">'+lg.Notion+'<span style="flex:1;text-align:left">'+t('cNot')+'</span></button><button class="pb" onclick="toast(\'Creating...\')">'+lg.OpenSpec+'<span style="flex:1;text-align:left">'+t('cOS')+'</span></button></div><div class="card card-bg"><label class="lbl">'+t('jCom')+'</label><textarea class="inp" rows="3" style="resize:none" placeholder="..."></textarea></div><button class="bp" style="background:#10b981" onclick="goS(4)">'+t('pubCl')+'</button>';
   }
   else if(cS===3&&!sp){
-    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 3</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('testT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('testS')+'</p><div class="card card-bg"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin:0">'+t('aiTst')+'</div><button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" onclick="toast(\'Running...\')">'+t('rerun')+'</button></div>'+cr.map((_,i)=>'<div class="tok">'+svgCheck+'<span style="font-family:monospace;font-size:11px">test_'+(i+1)+'</span><span style="margin-left:auto;font-weight:600">OK</span></div>').join('')+'<div style="margin-top:4px;font-size:11px;color:#10b981;font-weight:600">'+t('tPas',{n:cr.length,t:cr.length})+'</div></div><div class="card card-bg" style="padding:0;overflow:hidden"><div style="padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border);display:flex;justify-content:space-between;font-size:12px"><strong>'+t('mPrev')+'</strong><span style="font-family:monospace;color:#10b981;font-size:11px">localhost:3000</span></div><div style="padding:14px;display:flex;justify-content:center;background:#080810"><div style="width:100%;max-width:360px;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.4)"><div style="background:#0f172a;color:#fff;padding:6px 10px;font-size:11px;font-weight:700">App Preview</div><div style="padding:10px;font-size:12px;color:#334155;text-align:center">'+(L==='es'?'Vista previa interactiva de la aplicacion':'Interactive app preview')+'</div></div></div></div><button class="bp" onclick="goS(4)" style="margin-top:4px">'+t('allG')+'</button><button class="bs" onclick="goS(2)" style="margin-top:6px">'+t('smW')+'</button>';
+    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 3</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('testT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('testS')+'</p><div class="card card-bg"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin:0">'+t('aiTst')+'</div><div style="display:flex;gap:6px"><button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" onclick="runTermTests()">'+(L==='es'?'En terminal':'In terminal')+'</button><button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" onclick="toast(\'Running...\')">'+t('rerun')+'</button></div></div>'+cr.map((_,i)=>'<div class="tok">'+svgCheck+'<span style="font-family:monospace;font-size:11px">test_'+(i+1)+'</span><span style="margin-left:auto;font-weight:600">OK</span></div>').join('')+'<div style="margin-top:4px;font-size:11px;color:#10b981;font-weight:600">'+t('tPas',{n:cr.length,t:cr.length})+'</div></div><div class="card card-bg" style="padding:0;overflow:hidden"><div style="padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border);display:flex;justify-content:space-between;font-size:12px"><strong>'+t('mPrev')+'</strong><span style="font-family:monospace;color:#10b981;font-size:11px">localhost:3000</span></div><div style="padding:14px;display:flex;justify-content:center;background:#080810"><div style="width:100%;max-width:360px;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.4)"><div style="background:#0f172a;color:#fff;padding:6px 10px;font-size:11px;font-weight:700">App Preview</div><div style="padding:10px;font-size:12px;color:#334155;text-align:center">'+(L==='es'?'Vista previa interactiva de la aplicacion':'Interactive app preview')+'</div></div></div></div><button class="bp" onclick="goS(4)" style="margin-top:4px">'+t('allG')+'</button><button class="bs" onclick="goS(2)" style="margin-top:6px">'+t('smW')+'</button>';
   }
   else if(cS===4&&sp){sDone(t('spMsg'))}
   else if(cS===4&&!sp){
@@ -643,12 +730,81 @@ function sDone(msg){
   const tk=tasks[aTk];
   document.getElementById('sC').innerHTML='<div style="text-align:center;padding:24px 0" class="fi"><div style="width:48px;height:48px;border-radius:50%;background:rgba(16,185,129,.1);display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></div><h2 style="font-size:16px;font-weight:700;margin-bottom:6px">'+t('tDone')+'</h2><p style="font-size:13px;color:var(--vscode-descriptionForeground);margin-bottom:4px">'+aTk+' · '+(tk.title[L]||tk.title.es||tk.title.en||tk.title)+'</p><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:18px">'+msg+'</p><button class="bs" style="width:auto;display:inline-flex;padding:8px 20px" onclick="showScr(\'home\')">'+t('nxtT')+'</button></div>';
 }
+function buildTicketPrompt(tk, id){
+  const isSpike = tk.type === 'spike';
+  const ti = tk.title[L] || tk.title.es || tk.title.en || tk.title;
+  const de = tk.desc[L] || tk.desc.es || tk.desc.en || tk.desc;
+  const cr = (tk.criteria[L] || tk.criteria.es || tk.criteria.en || tk.criteria || []);
+
+  if (isSpike) {
+    return (L === 'es'
+      ? 'Investigación técnica para ticket [' + id + ']: "' + ti + '"\n\n' +
+        'Objetivo:\n' + de + '\n\n' +
+        'Entregables esperados:\n' + cr.map((c, i) => (i + 1) + '. ' + c).join('\n') + '\n\n' +
+        'Por favor analiza las opciones disponibles, compara alternativas con pros y contras y prepara un resumen comparativo claro.'
+      : 'Technical spike for ticket [' + id + ']: "' + ti + '"\n\n' +
+        'Objective:\n' + de + '\n\n' +
+        'Expected deliverables:\n' + cr.map((c, i) => (i + 1) + '. ' + c).join('\n') + '\n\n' +
+        'Please research available options, compare alternatives with pros and cons, and produce a clear summary.'
+    );
+  }
+
+  return (L === 'es'
+    ? 'Implementar ticket [' + id + ']: "' + ti + '"\n' +
+      'Tipo: ' + tk.type.toUpperCase() + '\n\n' +
+      'Descripción:\n' + de + '\n\n' +
+      'Criterios de Aceptación:\n' + cr.map(c => '- ' + c).join('\n') + '\n\n' +
+      'Por favor analiza el código, diseña los cambios e implementa la solución paso a paso cumpliendo todos los criterios de aceptación.'
+    : 'Implement ticket [' + id + ']: "' + ti + '"\n' +
+      'Type: ' + tk.type.toUpperCase() + '\n\n' +
+      'Description:\n' + de + '\n\n' +
+      'Acceptance Criteria:\n' + cr.map(c => '- ' + c).join('\n') + '\n\n' +
+      'Please inspect the project files, plan the changes, and implement the solution step by step meeting all criteria.'
+  );
+}
+
+function startAiWithTicket(){
+  const tk = tasks[aTk];
+  const p = buildTicketPrompt(tk, aTk);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(p).catch(() => {});
+  }
+  vsc.postMessage({ type: 'startAiChat', prompt: p, ticketId: aTk });
+  toast(L === 'es' ? 'Prompt copiado y chat iniciado' : 'Prompt copied & chat started');
+  goS(2);
+}
+
+function reopenChat(){
+  const tk = tasks[aTk];
+  const p = buildTicketPrompt(tk, aTk);
+  vsc.postMessage({ type: 'startAiChat', prompt: p, ticketId: aTk });
+  toast(L === 'es' ? 'Abriendo chat...' : 'Opening chat...');
+}
+
+function cpFullPrompt(){
+  const tk = tasks[aTk];
+  const p = buildTicketPrompt(tk, aTk);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(p).catch(() => {});
+  }
+  vsc.postMessage({ type: 'copyPrompt', text: p });
+  toast(L === 'es' ? 'Prompt completo copiado' : 'Full prompt copied');
+}
+
+function runTermTests(){
+  vsc.postMessage({ type: 'runTerminalTests' });
+  toast(L === 'es' ? 'Ejecutando tests en terminal...' : 'Running tests in terminal...');
+}
+
 function doMR(){
   vsc.postMessage({type:'createMR',ticketId:aTk,title:tasks[aTk].title[L]});
   toast(t('crMR'));
   setTimeout(()=>sDone(t('mrMsg')),300);
 }
 function cpP(btn,txt){
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).catch(() => {});
+  }
   vsc.postMessage({type:'copyPrompt',text:txt});
   const fb=document.getElementById('clipEl');
   document.getElementById('clipTx').innerText=t('cpd')+': "'+txt.substring(0,40)+'..."';
@@ -659,14 +815,7 @@ function cpP(btn,txt){
 }
 let ssN=0;
 function addSS(){
-  ssN++;
-  const l=document.getElementById('evL');if(!l)return;
-  const d=document.createElement('div');
-  d.style.cssText='display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);font-size:12px;margin-bottom:4px';
-  d.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span style="flex:1">screenshot_'+ssN+'.png</span><span style="color:#10b981;font-size:11px">OK</span>';
-  l.appendChild(d);
-  vsc.postMessage({type:'attachEvidence',ticketId:aTk});
-  toast(L==='es'?'Captura agregada':'Screenshot added');
+  vsc.postMessage({ type: 'pickEvidenceFiles', ticketId: aTk });
 }
 
 // ---- SETTINGS ----
@@ -700,6 +849,18 @@ window.addEventListener('message',e=>{
     saveTasks();
     toast((L==='es'?'Tarea eliminada: ':'Task deleted: ')+e.data.ticketId);
     showScr('home');
+  }
+  if(e.data.type==='evidenceSelected'&&e.data.fileNames){
+    const l=document.getElementById('evL');
+    if(l){
+      e.data.fileNames.forEach(name=>{
+        const d=document.createElement('div');
+        d.style.cssText='display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);font-size:12px;margin-bottom:4px';
+        d.innerHTML='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg><span style="flex:1">'+name+'</span><span style="color:#10b981;font-size:11px">OK</span>';
+        l.appendChild(d);
+      });
+      toast(L==='es'?'Evidencia adjuntada':'Evidence attached');
+    }
   }
 });
 
