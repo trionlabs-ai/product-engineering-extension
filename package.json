@@ -31,6 +31,14 @@
   "categories": ["Other"],
   "activationEvents": ["onStartupFinished"],
   "main": "./extension.js",
+  "scripts": {
+    "vscode:prepublish": "node -c extension.js",
+    "compile": "node -c extension.js",
+    "package": "vsce package --no-dependencies --allow-missing-repository",
+    "publish:vscode": "vsce publish",
+    "publish:ovsx": "ovsx publish",
+    "test": "node -c extension.js"
+  },
   "contributes": {
     "commands": [
       { "command": "productStudio.open", "title": "Product Studio: Open" },
@@ -45,6 +53,12 @@
           "enum": ["auto", "es", "en"],
           "default": "auto",
           "description": "Language for the Product Studio UI. 'auto' detects from VS Code."
+        },
+        "productStudio.ai.provider": {
+          "type": "string",
+          "enum": ["Claude", "GitHub Copilot", "Antigravity", "Continue", "Ollama", "ChatGPT"],
+          "default": "Claude",
+          "description": "Default AI assistant to connect and sync ticket prompts with."
         },
         "productStudio.jira.domain": {
           "type": "string",

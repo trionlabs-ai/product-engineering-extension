@@ -1,23 +1,23 @@
 # Product Studio
 
-A simplified IDE experience for Product Engineers, designers, QA, and non-technical roles who want to build software products (vibecoding) using AI assistance.
+A simplified, guided workspace for Product Engineers, PMs, designers, QA, and anyone doing "vibecoding" with AI assistance.
 
-Product Studio turns VS Code into a guided workspace: pick a Jira ticket, chat with your AI assistant (Claude, Copilot, or Antigravity), test changes, add evidence, and submit a merge request — all without writing a single line of code yourself.
+Product Studio turns VS Code into an accessible development studio: pick a Jira ticket, work with your connected AI assistant (Claude, GitHub Copilot, Antigravity, Ollama, Continue), test changes, launch local databases in 1 click via Docker, add rich evidence, and submit merge requests — without needing deep software engineering knowledge.
 
 ## Features
 
-- **Guided onboarding** — connect your tools (Jira, GitLab/GitHub, Figma, Confluence, Notion, Supabase, Grafana, AWS, and more) with a searchable connector catalog
-- **Ticket-centric workflow** — select a task and follow a step-by-step flow from understanding to delivery
-- **AI-powered development** — context is automatically sent to your AI chat (Claude, Copilot, or Antigravity) so you can describe what you need in plain language
-- **Automated testing** — AI generates and runs tests based on your acceptance criteria
-- **Live preview** — see changes in real time before submitting
-- **Evidence & review** — attach screenshots and comments directly to Jira
-- **Merge requests** — create GitLab/GitHub merge requests with one click; CI/CD handles deployment
-- **Spike / research tickets** — a dedicated flow for investigation tasks with documentation output to Confluence, Notion, or OpenSpec
-- **Figma integration** — view linked designs alongside the ticket description
-- **Task management** — create, edit, and delete tasks directly, or sync with Jira
-- **i18n** — full English and Spanish support, auto-detected from VS Code locale
-- **Multi-project** — switch between projects or add new ones anytime
+- **Guided Onboarding with Beginner Tips** — friendly "¿No sabes por dónde empezar?" tips, 1-click Starter Stack recommendation, and plain-language tool explanations.
+- **AI Assistant Hub & Topbar Indicator** — live status indicator on top for your connected AI (Claude, GitHub Copilot, Antigravity, Continue, Ollama, ChatGPT) with 1-click chat invocation.
+- **Docker & Local Environment Manager** — launch local databases (PostgreSQL, MySQL, Redis, docker-compose) with 1 click; automated Docker detection & 1-click Homebrew installer.
+- **Rich Text Jira Comments & Docs** — markdown toolbar (Bold, Italic, Code, Lists, Checkboxes, H3), live preview, and pre-populated acceptance criteria summaries.
+- **Backlog & Task Management** — view all sprint tasks or filter by "Assigned to me", create new tasks, and delete deprecated ones.
+- **Ticket-Centric Workflow** — step-by-step guidance from problem definition to acceptance criteria verification.
+- **Automated Testing** — AI-generated unit & integration tests alongside interactive localhost previews.
+- **Evidence Collection** — native file picker to attach screenshots and validation proof to Jira tickets.
+- **1-Click Merge Requests** — create GitLab/GitHub merge requests ready for team review and CI/CD deployment.
+- **Spike / Research Flow** — dedicated research flow for architecture investigations and documentation sync (Confluence, Notion, OpenSpec).
+- **Figma Integration** — design mockups displayed directly within ticket context.
+- **Full Internationalization (i18n)** — seamless English and Spanish support with instant topbar toggle.
 
 ## Installation
 
@@ -25,59 +25,46 @@ Product Studio turns VS Code into a guided workspace: pick a Jira ticket, chat w
 
 Search for **Product Studio** in the Extensions panel (`Ctrl+Shift+X` / `Cmd+Shift+X`) and click Install.
 
-### From source (development)
-
-Open `.product-studio-extension/` as a folder in VS Code, then press **F5** and choose **Run Product Studio Extension**. The Extension Development Host opens this repository so you can test Product Studio alongside the course project. Changes to `extension.js` can be reloaded in the host with **Cmd+R** (macOS) or **Ctrl+R** (Windows/Linux).
-
-If the VS Code command-line launcher is installed, you can also start the Extension Development Host from the repository root:
-
-```bash
-code --extensionDevelopmentPath="$(pwd)/.product-studio-extension" "$(pwd)"
-```
-
 ### From .vsix
 
 ```bash
-npx @vscode/vsce package
-code --install-extension product-studio-1.3.0.vsix
+code --install-extension product-studio-1.7.0.vsix --force
 ```
+
+### From source (development)
+
+Open this folder in VS Code, press **F5**, and choose **Run Product Studio Extension**.
 
 ## Configuration
 
-Open VS Code Settings and search for `Product Studio`:
+Open VS Code Settings (`Cmd+,` / `Ctrl+,`) and search for `Product Studio`:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `productStudio.language` | `auto` | UI language: `auto`, `es`, or `en` |
-| `productStudio.jira.domain` | — | Jira Cloud domain (e.g. `your-company.atlassian.net`) |
-| `productStudio.git.provider` | `gitlab` | `gitlab` or `github` |
-| `productStudio.git.repository` | — | Repository path (e.g. `org/checkout-service`) |
+| `productStudio.ai.provider` | `Claude` | Default AI assistant (`Claude`, `GitHub Copilot`, `Antigravity`, `Continue`, `Ollama`, `ChatGPT`) |
+| `productStudio.jira.domain` | `""` | Jira Cloud domain (e.g. `your-company.atlassian.net`) |
+| `productStudio.git.provider` | `gitlab` | Git provider: `gitlab` or `github` |
+| `productStudio.git.repository` | `""` | Repository path (e.g. `org/checkout-service`) |
 
-## Usage
+## Quick Start Guide
 
-1. Open VS Code
-2. Product Studio opens automatically and hides the left sidebar (Explorer). To open it again, run **Product Studio: Open** from the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
-3. Complete the onboarding: select your tools and connect Jira + your repo
-4. Pick a ticket from "My tasks"
-5. Follow the guided steps:
-   - **Understand** — read the task description and criteria
-   - **Work** — ask your AI to implement changes (prompts are copied to your clipboard)
-   - **Test** — review AI-generated automated tests + manual live preview
-   - **Review** — add screenshots and comments for Jira
-   - **Submit** — create a merge request on GitLab/GitHub
-
-For **Spike** tickets (research/investigation), the flow is:
-   - **Understand** — read the objective
-   - **Investigate** — research with AI assistance
-   - **Document** — publish findings to Confluence, Notion, or OpenSpec
-   - **Share** — close the ticket with documentation
+1. Open VS Code. Product Studio launches automatically in a distraction-free view.
+2. Complete onboarding: select your tools (or click **Elegir combinación básica** for an instant starter stack).
+3. Pick a ticket from the Backlog.
+4. Follow the step-by-step flow:
+   - **Paso 1: Entender** — read user story, criteria, and view Figma mockup.
+   - **Paso 2: Trabajar con IA** — prompt is automatically generated and copied; click to open your AI chat.
+   - **Paso 3: Testear** — verify automated tests and review live preview.
+   - **Paso 4: Documentar** — review pre-populated Jira comments, format with Markdown toolbar, and attach screenshot evidence.
+   - **Paso 5: Merge Request** — submit merge request to GitLab/GitHub.
 
 ## Tech Stack
 
-- VS Code Extension API (Webview panels)
-- Vanilla JavaScript (no build step required)
-- CSS with VS Code theme variables for native look & feel
-- SVG icons (no emoji, no external icon libraries)
+- Native VS Code Extension API (Webviews, Commands, State Storage)
+- Pure Vanilla JavaScript & CSS with VS Code Design Tokens
+- Scalable Vector Graphics (SVG) — zero external heavy dependencies, zero emojis
+- Integrated Docker CLI & Homebrew subprocess automation
 
 ## Publishing
 
