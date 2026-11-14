@@ -2,14 +2,14 @@ const vscode = require('vscode');
 const cp = require('child_process');
 
 // =====================================================================
-// PRODUCT STUDIO v1.5.0 — VS Code Extension
+// PRODUCT STUDIO v1.6.0 — VS Code Extension
 // Guided workspace for Product Engineers: onboarding, task CRUD,
-// AI chat sync, testing, evidence, Docker & Local Env, merge requests.
+// AI chat sync, testing, evidence, Docker & Local Env, rich Jira docs.
 // i18n: ES / EN.
 // =====================================================================
 
 function activate(context) {
-  console.log('Product Studio v1.5.0 activated');
+  console.log('Product Studio v1.6.0 activated');
 
   let mainPanel = null;
 
@@ -332,11 +332,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .topbar button{background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:4px;padding:2px 4px;border-radius:4px}
 .topbar button:hover{color:var(--vscode-foreground);background:var(--vscode-toolbar-hoverBackground)}
 .main{flex:1;overflow-y:auto;overflow-x:hidden}
-.ctr{max-width:580px;margin:0 auto;padding:24px;width:100%}
+.ctr{max-width:640px;margin:0 auto;padding:24px;width:100%}
+#sOb .ctr{max-width:720px}
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(195px, 1fr));gap:8px;margin-bottom:8px}
+.cat-pills{display:flex;gap:4px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
+.cat-pill{padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid var(--vscode-panel-border);background:transparent;color:var(--vscode-descriptionForeground);white-space:nowrap}
+.cat-pill.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border-color:var(--vscode-button-background)}
+.md-toolbar{display:flex;gap:4px;padding:4px 8px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-bottom:none;border-radius:6px 6px 0 0;font-size:11px;align-items:center}
+.md-toolbar button{background:none;border:none;cursor:pointer;padding:3px 6px;border-radius:4px;color:var(--vscode-descriptionForeground);font-weight:600;font-size:11px}
+.md-toolbar button:hover{background:var(--vscode-toolbar-hoverBackground);color:var(--vscode-foreground)}
+.md-editor{border-radius:0 0 6px 6px !important}
+.md-preview{background:var(--vscode-input-background);border:1px solid var(--vscode-input-border);border-radius:0 0 6px 6px;padding:10px;font-size:12px;line-height:1.5;max-height:160px;overflow-y:auto}
+.md-preview h3{font-size:13px;font-weight:700;margin:6px 0 3px}
+.md-preview h4{font-size:12px;font-weight:700;margin:5px 0 2px}
+.md-preview ul{padding-left:16px;margin:3px 0}
 #sOb{height:100%;min-height:100%;display:flex}
 #sOb .ctr{height:100%;min-height:100%;display:flex;flex-direction:column;justify-content:center}
 #sOb .ctr>*{flex-shrink:0}
-#sOb #cList{flex:1 1 auto;min-height:160px;max-height:none}
+#sOb #cList{flex:1 1 auto;min-height:160px;max-height:360px;overflow-y:auto}
 .card{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:14px;margin-bottom:12px}
 .card-bg{background:var(--vscode-sideBar-background)}
 .bp{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
@@ -581,43 +594,48 @@ function rOb(){
 function rObS(){
   const c=document.getElementById('obC');if(!c)return;
   if(obS===1){
-    let cats={};cnList.forEach(cn=>{if(!cats[cn.c])cats[cn.c]=[];cats[cn.c].push(cn)});
     let h='<div style="text-align:center;font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px;font-weight:600">'+t('obS',{n:1,t:3})+'</div>';
     h+='<h2 style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px">'+t('obT1')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);text-align:center;margin-bottom:12px">'+t('obS1')+'</p>';
+    
+    // Search bar
     h+='<div style="position:relative;margin-bottom:10px"><svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-descriptionForeground)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="inp" style="padding-left:30px" placeholder="'+t('obSrch')+'" oninput="fC(this.value)"></div>';
-    
-    h+='<div style="overflow-y:auto;padding-right:4px" id="cList">';
-    
-    // Frequently used / Popular section
-    h+='<div class="cat-lbl" data-cat="popular" style="color:var(--vscode-focusBorder)">'+t('cPop')+'</div>';
-    popularNames.forEach(pName=>{
-      const cn=cnList.find(x=>x.n===pName);
-      if(!cn)return;
-      const s=selC.has(cn.n);
-      const d=typeof cn.d==='string'?cn.d:(cn.d[L]||cn.d.es||cn.d.en);
-      let detectedTag='';
-      if((cn.n==='GitLab'&&detExts.gitlab)||(cn.n==='GitHub'&&detExts.github)||(cn.n==='Jira'&&detExts.jira)){
-        detectedTag='<span class="ext-badge">'+svgCheck+' '+t('vsPluginDetected')+'</span>';
-      }
-      h+='<div class="cc'+(s?' sel':'')+'" data-name="'+cn.n+'" data-cat="popular" onclick="tC(this)">'+(lg[cn.n]||'')+'<div style="flex:1"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:13px;font-weight:600">'+cn.n+'</span>'+detectedTag+'</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">'+d+'</div></div></div>';
-    });
 
-    // Categories
+    // Category pills filter
+    h+='<div class="cat-pills">';
+    h+='<button class="cat-pill active" onclick="setCatFilter(\'all\', this)">'+(L==='es'?'Todas':'All')+'</button>';
+    h+='<button class="cat-pill" onclick="setCatFilter(\'popular\', this)">'+t('cPop')+'</button>';
     catOrder.forEach(cat=>{
-      if(!cats[cat])return;
-      h+='<div class="cat-lbl" data-cat="'+cat+'">'+t(cat)+'</div>';
-      cats[cat].forEach(cn=>{
-        const s=selC.has(cn.n);
-        const d=typeof cn.d==='string'?cn.d:(cn.d[L]||cn.d.es||cn.d.en);
-        let detectedTag='';
-        if((cn.n==='GitLab'&&detExts.gitlab)||(cn.n==='GitHub'&&detExts.github)||(cn.n==='Jira'&&detExts.jira)){
-          detectedTag='<span class="ext-badge">'+svgCheck+' '+t('vsPluginDetected')+'</span>';
-        }
-        h+='<div class="cc'+(s?' sel':'')+'" data-name="'+cn.n+'" data-cat="'+cat+'" onclick="tC(this)">'+(lg[cn.n]||'')+'<div style="flex:1"><div style="display:flex;align-items:center;gap:6px"><span style="font-size:13px;font-weight:600">'+cn.n+'</span>'+detectedTag+'</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">'+d+'</div></div></div>';
-      });
+      h+='<button class="cat-pill" onclick="setCatFilter(\''+cat+'\', this)">'+t(cat)+'</button>';
     });
-    
-    h+='</div><div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px"><span style="font-size:11px;color:var(--vscode-descriptionForeground)" id="cCnt">'+t('obSel',{n:selC.size})+'</span><button class="bp" style="width:auto;padding:8px 20px" onclick="obN(2)">'+t('cont')+'</button></div>';
+    h+='</div>';
+
+    // Responsive Grid (2-3 columns) with NO DUPLICATES
+    h+='<div class="tool-grid" id="cList">';
+    cnList.forEach(cn=>{
+      const s = selC.has(cn.n);
+      const isPop = popularNames.includes(cn.n);
+      const d = typeof cn.d==='string'?cn.d:(cn.d[L]||cn.d.es||cn.d.en);
+      let detectedTag = '';
+      if((cn.n==='GitLab'&&detExts.gitlab)||(cn.n==='GitHub'&&detExts.github)||(cn.n==='Jira'&&detExts.jira)){
+        detectedTag='<span class="ext-badge" style="font-size:8px;padding:1px 4px">'+svgCheck+' VS</span>';
+      }
+      let popBadge = isPop ? '<span style="font-size:10px;color:var(--vscode-focusBorder);margin-left:auto;font-weight:700">★</span>' : '';
+
+      h+='<div class="cc'+(s?' sel':'')+'" data-name="'+cn.n+'" data-cat="'+cn.c+'" data-pop="'+(isPop?'1':'0')+'" data-desc="'+d.replace(/"/g,'&quot;')+'" onclick="tC(this)">'+
+        (lg[cn.n]||'') +
+        '<div style="flex:1;min-width:0">'+
+          '<div style="display:flex;align-items:center;gap:4px">'+
+            '<span style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+cn.n+'</span>'+
+            detectedTag +
+            popBadge +
+          '</div>'+
+          '<div style="font-size:10px;color:var(--vscode-descriptionForeground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+d+'</div>'+
+        '</div>'+
+      '</div>';
+    });
+    h+='</div>';
+
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px"><span style="font-size:11px;color:var(--vscode-descriptionForeground)" id="cCnt">'+t('obSel',{n:selC.size})+'</span><button class="bp" style="width:auto;padding:8px 20px" onclick="obN(2)">'+t('cont')+'</button></div>';
     c.innerHTML=h;
   }else if(obS===2){
     let jDetMsg='';
@@ -647,27 +665,49 @@ function connectRepo(){
   vsc.postMessage({type:'openExternal',url:base+repo});
 }
 function obN(s){obS=s;rObS()}
+let currentCat = 'all';
+let currentQuery = '';
+
+function setCatFilter(cat, btn) {
+  currentCat = cat;
+  document.querySelectorAll('.cat-pill').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  applyToolFilters();
+}
+
+function fC(q) {
+  currentQuery = (q || '').toLowerCase();
+  applyToolFilters();
+}
+
+function applyToolFilters() {
+  document.querySelectorAll('.tool-grid .cc').forEach(c => {
+    const cat = c.dataset.cat;
+    const isPop = c.dataset.pop === '1';
+    const name = (c.dataset.name || '').toLowerCase();
+    const desc = (c.dataset.desc || '').toLowerCase();
+
+    const matchesCat = (currentCat === 'all') ||
+                       (currentCat === 'popular' && isPop) ||
+                       (cat === currentCat);
+
+    const matchesQuery = !currentQuery || name.includes(currentQuery) || desc.includes(currentQuery);
+
+    c.style.display = (matchesCat && matchesQuery) ? 'flex' : 'none';
+  });
+}
+
 function tC(el){
   const n=el.dataset.name;
   if(selC.has(n)){
     selC.delete(n);
-    document.querySelectorAll('.cc[data-name="'+n+'"]').forEach(e=>e.classList.remove('sel'));
+    el.classList.remove('sel');
   }else{
     selC.add(n);
-    document.querySelectorAll('.cc[data-name="'+n+'"]').forEach(e=>e.classList.add('sel'));
+    el.classList.add('sel');
   }
   const cnt=document.getElementById('cCnt');
   if(cnt)cnt.innerText=t('obSel',{n:selC.size});
-}
-function fC(q){
-  q=q.toLowerCase();
-  document.querySelectorAll('.cc').forEach(c=>{
-    c.classList.toggle('hid',q&&!c.dataset.name.toLowerCase().includes(q));
-  });
-  document.querySelectorAll('.cat-lbl').forEach(l=>{
-    const cat=l.dataset.cat;
-    l.style.display=Array.from(document.querySelectorAll('.cc[data-cat="'+cat+'"]')).some(c=>!c.classList.contains('hid'))?'':'none';
-  });
 }
 function startOb(){
   obS=1;
@@ -838,14 +878,75 @@ function rSC(){
     '<div style="margin-top:14px"><button class="bp" onclick="goS(3)">'+svgCheck+' '+(sp?t('aiDD'):t('aiDT'))+'</button></div>';
   }
   else if(cS===3&&sp){
-    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 3</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('docT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('docS')+'</p><div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px"><button class="pb" onclick="toast(\'Creating...\')">'+lg.Confluence+'<span style="flex:1;text-align:left">'+t('cConf')+'</span></button><button class="pb" onclick="toast(\'Creating...\')">'+lg.Notion+'<span style="flex:1;text-align:left">'+t('cNot')+'</span></button><button class="pb" onclick="toast(\'Creating...\')">'+lg.OpenSpec+'<span style="flex:1;text-align:left">'+t('cOS')+'</span></button></div><div class="card card-bg"><label class="lbl">'+t('jCom')+'</label><textarea class="inp" rows="3" style="resize:none" placeholder="..."></textarea></div><button class="bp" style="background:#10b981" onclick="goS(4)">'+t('pubCl')+'</button>';
+    const initJira = buildJiraReviewComment(tk, aTk);
+    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 3</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('docT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('docS')+'</p>'+
+    '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">'+
+      '<button class="pb" onclick="toast(\'Creating...\')">'+lg.Confluence+'<span style="flex:1;text-align:left">'+t('cConf')+'</span></button>'+
+      '<button class="pb" onclick="toast(\'Creating...\')">'+lg.Notion+'<span style="flex:1;text-align:left">'+t('cNot')+'</span></button>'+
+      '<button class="pb" onclick="toast(\'Creating...\')">'+lg.OpenSpec+'<span style="flex:1;text-align:left">'+t('cOS')+'</span></button>'+
+    '</div>'+
+    '<div class="card card-bg">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+        '<label class="lbl" style="margin:0">'+t('jCom')+'</label>'+
+        '<button class="bs" style="width:auto;padding:2px 8px;font-size:11px" onclick="toggleJiraPreview(\'spike\')" id="pBtnSpike">'+(L==='es'?'Vista previa':'Preview')+'</button>'+
+      '</div>'+
+      '<div class="md-toolbar">'+
+        '<button onclick="insertMd(\'spike\',\'bold\')">B</button>'+
+        '<button onclick="insertMd(\'spike\',\'italic\')">I</button>'+
+        '<button onclick="insertMd(\'spike\',\'code\')">Code</button>'+
+        '<button onclick="insertMd(\'spike\',\'list\')">Lista</button>'+
+        '<button onclick="insertMd(\'spike\',\'check\')">Check</button>'+
+        '<button onclick="insertMd(\'spike\',\'h3\')">H3</button>'+
+        '<span style="flex:1"></span>'+
+        '<button onclick="resetJiraComment(\'spike\')">'+(L==='es'?'Restablecer':'Reset')+'</button>'+
+      '</div>'+
+      '<textarea class="inp md-editor" id="jiraCommentSpike" rows="6" style="resize:vertical"></textarea>'+
+      '<div id="jiraPreviewSpike" class="md-preview" style="display:none"></div>'+
+    '</div>'+
+    '<button class="bp" style="background:#10b981" onclick="goS(4)">'+t('pubCl')+'</button>';
+
+    setTimeout(()=>{
+      const ta = document.getElementById('jiraCommentSpike');
+      if (ta) ta.value = initJira;
+    }, 10);
   }
   else if(cS===3&&!sp){
     c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 3</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('testT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('testS')+'</p><div class="card card-bg"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin:0">'+t('aiTst')+'</div><div style="display:flex;gap:6px"><button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" onclick="runTermTests()">'+(L==='es'?'En terminal':'In terminal')+'</button><button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" onclick="toast(\'Running...\')">'+t('rerun')+'</button></div></div>'+cr.map((_,i)=>'<div class="tok">'+svgCheck+'<span style="font-family:monospace;font-size:11px">test_'+(i+1)+'</span><span style="margin-left:auto;font-weight:600">OK</span></div>').join('')+'<div style="margin-top:4px;font-size:11px;color:#10b981;font-weight:600">'+t('tPas',{n:cr.length,t:cr.length})+'</div></div><div class="card card-bg" style="padding:0;overflow:hidden"><div style="padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border);display:flex;justify-content:space-between;font-size:12px"><strong>'+t('mPrev')+'</strong><span style="font-family:monospace;color:#10b981;font-size:11px">localhost:3000</span></div><div style="padding:14px;display:flex;justify-content:center;background:#080810"><div style="width:100%;max-width:360px;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.4)"><div style="background:#0f172a;color:#fff;padding:6px 10px;font-size:11px;font-weight:700">App Preview</div><div style="padding:10px;font-size:12px;color:#334155;text-align:center">'+(L==='es'?'Vista previa interactiva de la aplicacion':'Interactive app preview')+'</div></div></div></div><button class="bp" onclick="goS(4)" style="margin-top:4px">'+t('allG')+'</button><button class="bs" onclick="goS(2)" style="margin-top:6px">'+t('smW')+'</button>';
   }
   else if(cS===4&&sp){sDone(t('spMsg'))}
   else if(cS===4&&!sp){
-    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 4</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('revT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('revS')+'</p><div class="card" style="border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05)"><div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#10b981">'+svgCheck+cr.length+'/'+cr.length+' + tests OK</div></div><div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+t('evid')+'</div><button class="bs" style="border-style:dashed;margin-bottom:8px;font-size:12px;padding:8px" onclick="addSS()">'+svgCam+' '+t('addSS')+'</button><div id="evL"></div><label class="lbl" style="margin-top:8px">'+t('jCom')+'</label><textarea class="inp" rows="2" style="resize:none" placeholder="..."></textarea></div><button class="bp" onclick="goS(5)">'+t('upMR')+'</button>';
+    const initJira = buildJiraReviewComment(tk, aTk);
+    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 4</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('revT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('revS')+'</p>'+
+    '<div class="card" style="border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05)">'+
+      '<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#10b981">'+svgCheck+cr.length+'/'+cr.length+' + tests OK</div>'+
+    '</div>'+
+    '<div class="card card-bg">'+
+      '<div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+t('evid')+'</div>'+
+      '<button class="bs" style="border-style:dashed;margin-bottom:8px;font-size:12px;padding:8px" onclick="addSS()">'+svgCam+' '+t('addSS')+'</button>'+
+      '<div id="evL"></div>'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px">'+
+        '<label class="lbl" style="margin:0">'+t('jCom')+'</label>'+
+        '<button class="bs" style="width:auto;padding:2px 8px;font-size:11px" onclick="toggleJiraPreview(\'story\')" id="pBtnStory">'+(L==='es'?'Vista previa':'Preview')+'</button>'+
+      '</div>'+
+      '<div class="md-toolbar">'+
+        '<button onclick="insertMd(\'story\',\'bold\')">B</button>'+
+        '<button onclick="insertMd(\'story\',\'italic\')">I</button>'+
+        '<button onclick="insertMd(\'story\',\'code\')">Code</button>'+
+        '<button onclick="insertMd(\'story\',\'list\')">Lista</button>'+
+        '<button onclick="insertMd(\'story\',\'check\')">Check</button>'+
+        '<button onclick="insertMd(\'story\',\'h3\')">H3</button>'+
+        '<span style="flex:1"></span>'+
+        '<button onclick="resetJiraComment(\'story\')">'+(L==='es'?'Restablecer':'Reset')+'</button>'+
+      '</div>'+
+      '<textarea class="inp md-editor" id="jiraCommentStory" rows="6" style="resize:vertical"></textarea>'+
+      '<div id="jiraPreviewStory" class="md-preview" style="display:none"></div>'+
+    '</div>'+
+    '<button class="bp" onclick="goS(5)">'+t('upMR')+'</button>';
+
+    setTimeout(()=>{
+      const ta = document.getElementById('jiraCommentStory');
+      if (ta) ta.value = initJira;
+    }, 10);
   }
   else if(cS===5){
     c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 5</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('mrT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('mrS')+'</p><div class="card card-bg" style="font-size:13px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--vscode-descriptionForeground)">Ticket</span><span style="font-family:monospace;color:var(--vscode-textLink-foreground);font-weight:700">'+aTk+'</span></div><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--vscode-descriptionForeground)">'+t('branch')+'</span><span style="font-family:monospace;font-size:12px">feature/'+aTk.toLowerCase()+'</span></div><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--vscode-descriptionForeground)">'+t('tests')+'</span><span style="color:#10b981;font-weight:600">'+cr.length+'/'+cr.length+' OK</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--vscode-descriptionForeground)">'+t('evid')+'</span><span style="color:#10b981;font-weight:600">Jira</span></div></div><button class="bg" onclick="doMR()">'+lg.GitLab+' '+t('crMR')+'</button>';
@@ -1089,6 +1190,161 @@ function stopContainer(id){
 function refreshDocker(){
   vsc.postMessage({ type: 'checkDocker' });
   toast(L==='es'?'Verificando...':'Checking...');
+}
+
+// ---- JIRA RICH REVIEWS & COMMENTS ----
+function buildJiraReviewComment(tk, id) {
+  if (!tk) return '';
+  const isSpike = tk.type === 'spike';
+  const rawTitle = typeof tk.title === 'string' ? tk.title : (tk.title[L] || tk.title.es || tk.title.en || '');
+  let rawCriteria = [];
+  if (Array.isArray(tk.criteria)) {
+    rawCriteria = tk.criteria;
+  } else if (tk.criteria && typeof tk.criteria === 'object') {
+    rawCriteria = tk.criteria[L] || tk.criteria.es || tk.criteria.en || [];
+  }
+  const bt = String.fromCharCode(96);
+
+  if (isSpike) {
+    if (L === 'es') {
+      return '### Investigación Técnica y Definición\n\n' +
+        '**Ticket:** ' + id + ' - ' + rawTitle + '\n\n' +
+        '#### 1. Resumen de la Investigación\n' +
+        '- Se analizó la viabilidad técnica y arquitectura de la solución propuesta.\n' +
+        '- Documentación de referencia generada y sincronizada.\n\n' +
+        '#### 2. Criterios y Definiciones Evaluadas\n' +
+        rawCriteria.map(c => '- [x] ' + c).join('\n') + '\n\n' +
+        '#### 3. Conclusión y Recomendación\n' +
+        '- Se recomienda proceder con la implementación en el próximo sprint.\n' +
+        '- Dependencias y riesgos mitigados.';
+    } else {
+      return '### Technical Investigation & Spike Definition\n\n' +
+        '**Ticket:** ' + id + ' - ' + rawTitle + '\n\n' +
+        '#### 1. Investigation Summary\n' +
+        '- Technical feasibility and architecture analysis completed.\n' +
+        '- Reference documentation generated and synchronized.\n\n' +
+        '#### 2. Evaluated Criteria & Decisions\n' +
+        rawCriteria.map(c => '- [x] ' + c).join('\n') + '\n\n' +
+        '#### 3. Recommendation & Next Steps\n' +
+        '- Ready to proceed with implementation in the upcoming sprint.\n' +
+        '- Dependencies and technical risks mitigated.';
+    }
+  } else {
+    if (L === 'es') {
+      return '### Resumen de Entrega y Validación\n\n' +
+        '**Ticket:** ' + id + ' - ' + rawTitle + '\n' +
+        '**Rama:** ' + bt + 'feature/' + id.toLowerCase() + bt + '\n\n' +
+        '#### Criterios de Aceptación Verificados\n' +
+        rawCriteria.map(c => '- [x] ' + c).join('\n') + '\n\n' +
+        '#### Pruebas y Evidencias\n' +
+        '- [x] Pruebas unitarias y de integración ejecutadas con éxito.\n' +
+        '- [x] Pruebas visuales y manuales completadas.\n' +
+        '- [x] Capturas de pantalla y evidencias adjuntas en el ticket.\n\n' +
+        '#### Estado\n' +
+        'Listo para revisión y Merge Request.';
+    } else {
+      return '### Implementation & Verification Summary\n\n' +
+        '**Ticket:** ' + id + ' - ' + rawTitle + '\n' +
+        '**Branch:** ' + bt + 'feature/' + id.toLowerCase() + bt + '\n\n' +
+        '#### Verified Acceptance Criteria\n' +
+        rawCriteria.map(c => '- [x] ' + c).join('\n') + '\n\n' +
+        '#### Testing & Evidence\n' +
+        '- [x] Automated and integration tests passed successfully.\n' +
+        '- [x] Manual and UI validation completed.\n' +
+        '- [x] Screenshots and evidence attached to ticket.\n\n' +
+        '#### Status\n' +
+        'Ready for review and Merge Request.';
+    }
+  }
+}
+
+function insertMd(prefix, type) {
+  const cap = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+  const ta = document.getElementById('jiraComment' + cap);
+  if (!ta) return;
+  const s = ta.selectionStart;
+  const e = ta.selectionEnd;
+  const text = ta.value;
+  const sel = text.substring(s, e);
+  let start = '', end = '', def = (L === 'es' ? 'texto' : 'text');
+  const bt = String.fromCharCode(96);
+  if (type === 'bold') { start = '**'; end = '**'; }
+  else if (type === 'italic') { start = '*'; end = '*'; }
+  else if (type === 'code') { start = bt; end = bt; }
+  else if (type === 'list') { start = '\n- '; end = ''; }
+  else if (type === 'check') { start = '\n- [x] '; end = ''; }
+  else if (type === 'h3') { start = '\n### '; end = ''; def = (L === 'es' ? 'Título' : 'Heading'); }
+
+  const replacement = start + (sel || def) + end;
+  ta.value = text.substring(0, s) + replacement + text.substring(e);
+  ta.focus();
+  ta.selectionStart = s + start.length;
+  ta.selectionEnd = s + replacement.length - end.length;
+}
+
+function renderSimpleMarkdown(md) {
+  if (!md) return '';
+  let esc = md
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  // Headers
+  esc = esc.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+  esc = esc.replace(/^#### (.*$)/gim, '<h4>$1</h4>');
+
+  // Bold & Italics
+  esc = esc.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+  esc = esc.replace(/\*(.*?)\*/gim, '<em>$1</em>');
+
+  // Code
+  const bt = String.fromCharCode(96);
+  const codeRegex = new RegExp(bt + '([^' + bt + ']+)' + bt, 'gim');
+  esc = esc.replace(codeRegex, '<code style="background:var(--vscode-textCodeBlock-background);padding:1px 4px;border-radius:3px;font-family:monospace">$1</code>');
+
+  // Checkboxes
+  esc = esc.replace(/^- \[x\] (.*$)/gim, '<div style="display:flex;align-items:center;gap:6px;margin:3px 0"><input type="checkbox" checked disabled style="margin:0"><span style="text-decoration:line-through;color:var(--vscode-descriptionForeground)">$1</span></div>');
+  esc = esc.replace(/^- \[ \] (.*$)/gim, '<div style="display:flex;align-items:center;gap:6px;margin:3px 0"><input type="checkbox" disabled style="margin:0"><span>$1</span></div>');
+
+  // Bullet lists
+  esc = esc.replace(/^- (?!\[)(.*$)/gim, '<li style="margin-left:16px">$1</li>');
+
+  // Line breaks
+  esc = esc.replace(/\n/g, '<br>');
+
+  return esc;
+}
+
+function toggleJiraPreview(prefix) {
+  const cap = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+  const ta = document.getElementById('jiraComment' + cap);
+  const pv = document.getElementById('jiraPreview' + cap);
+  const btn = document.getElementById('pBtn' + cap);
+  if (!ta || !pv || !btn) return;
+  
+  if (pv.style.display === 'none') {
+    pv.innerHTML = renderSimpleMarkdown(ta.value);
+    pv.style.display = 'block';
+    ta.style.display = 'none';
+    btn.innerText = (L === 'es' ? 'Editar' : 'Edit');
+  } else {
+    pv.style.display = 'none';
+    ta.style.display = 'block';
+    btn.innerText = (L === 'es' ? 'Vista previa' : 'Preview');
+  }
+}
+
+function resetJiraComment(prefix) {
+  const cap = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+  const ta = document.getElementById('jiraComment' + cap);
+  const pv = document.getElementById('jiraPreview' + cap);
+  if (!ta) return;
+  const tk = tasks[aTk];
+  ta.value = buildJiraReviewComment(tk, aTk);
+  if (pv && pv.style.display !== 'none') {
+    pv.innerHTML = renderSimpleMarkdown(ta.value);
+  }
+  toast(L === 'es' ? 'Comentario restablecido' : 'Comment reset');
 }
 
 // ---- SETTINGS ----
