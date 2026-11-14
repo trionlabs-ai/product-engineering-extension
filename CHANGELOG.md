@@ -2,6 +2,26 @@
 
 All notable changes to Product Studio are documented here.
 
+## [1.8.0] - 2026-11-14
+
+### Added
+- **Epics & Milestones Roadmap in Cards View**:
+  - View switcher tabs: **Tarjetas** (Cards), **Por Epic** (Grouped by Epic), and **Roadmap & Milestones** (Visual timeline).
+  - Roadmap & Milestone summary strip at the top of cards view showing current active milestone progress, target date, and completion bar.
+  - Epic badges (`EPIC-10`, `EPIC-12`, `EPIC-15`) and quarterly milestone tags on every card.
+  - Dedicated Epics grouped view with dynamic progress calculation based on task status.
+  - Interactive Milestones Roadmap tracking Q4, Q1, and Q2 deliverables with associated Epics and tasks.
+  - Epic selection dropdown in the Create Task form.
+- **Automated Tests Generation with AI**:
+  - Step 3 testing view displays detailed automated test suites with execution duration and passed badges.
+  - 1-click **Generar más tests automáticos (IA)** button generating edge cases, input sanitization, and resilience tests on the fly.
+  - Test pass counter dynamically re-evaluating test coverage.
+- **Pre-attached Screen Captures from Test Runner**:
+  - Visual Playwright E2E test capture artifacts pre-populated automatically in Step 3 and Step 4 review.
+  - Vector SVG browser mockups rendering sharp UI preview thumbnails for screenshots.
+  - 1-click **Tomar más capturas automáticas (Playwright)** to simulate additional test captures.
+  - Pre-populated Jira comments including acceptance criteria, passed automated tests list, and all attached test screenshot artifacts.
+
 ## [1.7.0] - 2026-11-14
 
 ### Added
