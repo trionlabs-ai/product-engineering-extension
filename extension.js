@@ -1,13 +1,15 @@
 const vscode = require('vscode');
+const cp = require('child_process');
 
 // =====================================================================
-// PRODUCT STUDIO v1.4.0 — VS Code Extension
+// PRODUCT STUDIO v1.5.0 — VS Code Extension
 // Guided workspace for Product Engineers: onboarding, task CRUD,
-// AI chat sync, testing, evidence, merge requests. i18n: ES / EN.
+// AI chat sync, testing, evidence, Docker & Local Env, merge requests.
+// i18n: ES / EN.
 // =====================================================================
 
 function activate(context) {
-  console.log('Product Studio v1.4.0 activated');
+  console.log('Product Studio v1.5.0 activated');
 
   let mainPanel = null;
 
@@ -31,6 +33,38 @@ function activate(context) {
   // Load stored tasks or use defaults
   function getTasks() {
     return getState('tasks', null);
+  }
+
+  function getDockerStatus() {
+    return new Promise(resolve => {
+      cp.exec('docker --version', (err, stdout) => {
+        if (err || !stdout) {
+          return resolve({ installed: false, running: false, version: '' });
+        }
+        const version = stdout.trim();
+        cp.exec('docker info', infoErr => {
+          resolve({
+            installed: true,
+            running: !infoErr,
+            version
+          });
+        });
+      });
+    });
+  }
+
+  function getDockerContainers() {
+    return new Promise(resolve => {
+      cp.exec('docker ps -a --format "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}"', (err, stdout) => {
+        if (err || !stdout) return resolve([]);
+        const lines = stdout.trim().split('\n').filter(Boolean);
+        const list = lines.map(l => {
+          const [id, name, image, status, ports] = l.split('|');
+          return { id, name, image, status, ports };
+        });
+        resolve(list);
+      });
+    });
   }
 
   async function triggerAiChat(prompt, lang) {
@@ -182,6 +216,79 @@ function activate(context) {
             mainPanel.webview.postMessage({ type: 'deleteConfirmed', ticketId: msg.ticketId });
           }
           break;
+        case 'checkDocker':
+          const docStatus = await getDockerStatus();
+          const docContainers = await getDockerContainers();
+          mainPanel.webview.postMessage({
+            type: 'dockerInfo',
+            status: docStatus,
+            containers: docContainers
+          });
+          break;
+        case 'installDocker':
+          const term = vscode.window.activeTerminal || vscode.window.createTerminal('Product Studio: Setup');
+          term.show();
+          if (process.platform === 'darwin') {
+            term.sendText('echo "=== Instalando Docker en macOS ==="');
+            term.sendText('if ! command -v brew &> /dev/null; then echo "Instalando Homebrew..."; /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; fi');
+            term.sendText('echo "Instalando Docker Desktop con Homebrew..." && brew install --cask docker && open -a Docker');
+          } else {
+            term.sendText('echo "Por favor visita https://docs.docker.com/get-docker/ para instalar Docker."');
+          }
+          break;
+        case 'startDockerDaemon':
+          if (process.platform === 'darwin') {
+            cp.exec('open -a Docker', (err) => {
+              if (err) {
+                vscode.window.showErrorMessage('Error al abrir Docker Desktop: ' + err.message);
+              } else {
+                vscode.window.showInformationMessage(lang === 'es' ? 'Abriendo Docker Desktop...' : 'Opening Docker Desktop...');
+              }
+            });
+          }
+          break;
+        case 'launchDockerService':
+          let cmd = '';
+          if (msg.service === 'postgres') {
+            cmd = 'docker run -d --name ps-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:alpine || docker start ps-postgres';
+          } else if (msg.service === 'mysql') {
+            cmd = 'docker run -d --name ps-mysql -e MYSQL_ROOT_PASSWORD=mysql -p 3306:3306 mysql:latest || docker start ps-mysql';
+          } else if (msg.service === 'redis') {
+            cmd = 'docker run -d --name ps-redis -p 6379:6379 redis:alpine || docker start ps-redis';
+          } else if (msg.service === 'compose') {
+            cmd = 'docker compose up -d';
+          }
+          if (cmd) {
+            cp.exec(cmd, async (err) => {
+              if (err) {
+                vscode.window.showErrorMessage('Error al iniciar servicio: ' + err.message);
+              } else {
+                vscode.window.showInformationMessage(lang === 'es' ? 'Servicio iniciado correctamente.' : 'Service started successfully.');
+              }
+              const updatedStatus = await getDockerStatus();
+              const updatedContainers = await getDockerContainers();
+              mainPanel.webview.postMessage({
+                type: 'dockerInfo',
+                status: updatedStatus,
+                containers: updatedContainers
+              });
+            });
+          }
+          break;
+        case 'stopDockerContainer':
+          if (msg.containerId) {
+            cp.exec(`docker stop ${msg.containerId}`, async () => {
+              const updatedStatus = await getDockerStatus();
+              const updatedContainers = await getDockerContainers();
+              mainPanel.webview.postMessage({
+                type: 'dockerInfo',
+                status: updatedStatus,
+                containers: updatedContainers
+              });
+              vscode.window.showInformationMessage(lang === 'es' ? 'Contenedor detenido.' : 'Container stopped.');
+            });
+          }
+          break;
       }
     });
 
@@ -291,6 +398,8 @@ select.inp{cursor:pointer}
     </div>
     <button onclick="startOb()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="bNP"></span></button>
     <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
+    <button onclick="showScr('env')" title="Docker & Entorno local"><svg viewBox="0 0 24 24" width="13" height="13" fill="#2496ED"><path d="M13.98 11.08h1.83V9.25H13.98v1.83zm-2.4 0h1.83V9.25h-1.83v1.83zm-2.41 0H11V9.25H9.17v1.83zm-2.4 0h1.83V9.25H6.77v1.83zm-2.41 0h1.83V9.25H4.36v1.83zm4.81-2.34h1.83V6.91H9.17v1.83zm2.4 0h1.83V6.91h-1.83v1.83zm2.41 0h1.83V6.91h-1.83v1.83zm-4.81-2.33h1.83V4.58H9.17v1.83zm13.78 6.42c-.44-.31-1.42-.45-2.2-.18-.17-.74-.6-1.39-1.25-1.88l-.51-.38-.34.54c-.38.59-.51 1.34-.41 2.05-.62.33-1.63.38-2.18.38H1.67c-.37 0-.67.3-.67.67 0 2.22.86 4.3 2.42 5.86C5.07 23.8 7.39 24.5 12 24.5c6.53 0 10.9-3.9 11.95-10.42.06-.41.05-.98-.5-1.76l-.5-.33z"/></svg><span>Docker</span><span class="sd sd-p" id="envDot" style="width:6px;height:6px"></span></button>
+    <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
     <button onclick="showScr('settings')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span id="bRC"></span></button>
   </div>
 </div>
@@ -301,6 +410,7 @@ select.inp{cursor:pointer}
   <div id="sTk" style="display:none"></div>
   <div id="sSet" style="display:none"></div>
   <div id="sCreate" style="display:none"></div>
+  <div id="sEnv" style="display:none"></div>
 </div>
 
 <div class="toast" id="toastEl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span id="toastTx"></span></div>
@@ -322,8 +432,13 @@ const svgCam='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke
 const svgDel='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 const svgX='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 const svgExtLink='<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>';
+const svgPlay='<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+const svgTerm='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
+const svgDb='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>';
+const svgRedis='<svg viewBox="0 0 24 24" width="18" height="18" fill="#D82C20"><rect x="3" y="3" width="18" height="18" rx="3"/><path fill="#fff" d="M7 8h10v2H7zm0 3h7v2H7zm0 3h10v2H7z"/></svg>';
 
 const lg={
+  Docker:'<svg viewBox="0 0 24 24" width="18" height="18" fill="#2496ED"><path d="M13.98 11.08h1.83V9.25H13.98v1.83zm-2.4 0h1.83V9.25h-1.83v1.83zm-2.41 0H11V9.25H9.17v1.83zm-2.4 0h1.83V9.25H6.77v1.83zm-2.41 0h1.83V9.25H4.36v1.83zm4.81-2.34h1.83V6.91H9.17v1.83zm2.4 0h1.83V6.91h-1.83v1.83zm2.41 0h1.83V6.91h-1.83v1.83zm-4.81-2.33h1.83V4.58H9.17v1.83zm13.78 6.42c-.44-.31-1.42-.45-2.2-.18-.17-.74-.6-1.39-1.25-1.88l-.51-.38-.34.54c-.38.59-.51 1.34-.41 2.05-.62.33-1.63.38-2.18.38H1.67c-.37 0-.67.3-.67.67 0 2.22.86 4.3 2.42 5.86C5.07 23.8 7.39 24.5 12 24.5c6.53 0 10.9-3.9 11.95-10.42.06-.41.05-.98-.5-1.76l-.5-.33z"/></svg>',
   Jira:'<svg viewBox="0 0 24 24" width="18" height="18" fill="#0052cc"><path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.74c0 2.4 1.97 4.35 4.35 4.35V2h-10.48zm-4.35 4.35c0 2.4 1.97 4.35 4.35 4.35h1.74v1.74c0 2.4 1.97 4.35 4.35 4.35V6.35H7.18zm-4.35 4.35c0 2.4 1.97 4.35 4.35 4.35h1.74v1.74c0 2.4 1.97 4.35 4.35 4.35v-10.44H2.83z"/></svg>',
   GitLab:'<svg viewBox="0 0 24 24" width="18" height="18"><path fill="#e24329" d="m12 20.8 4.7-14.5H7.3z"/><path fill="#fc6d26" d="M12 20.8 7.3 6.3H1.8z"/><path fill="#fca326" d="m1.8 6.3-1.6 5c-.2.5 0 1.1.4 1.4L12 20.8z"/><path fill="#e24329" d="M1.8 6.3h5.5L4.5 2.1c-.2-.5-.8-.5-1 0z"/><path fill="#fc6d26" d="m12 20.8 4.7-14.5h5.5z"/><path fill="#fca326" d="m22.2 6.3 1.6 5c.2.5 0 1.1-.4 1.4L12 20.8z"/><path fill="#e24329" d="M22.2 6.3h-5.5l2.8-4.2c.2-.5.8-.5 1 0z"/></svg>',
   GitHub:'<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>',
@@ -349,14 +464,16 @@ const D={
     backlog:'Backlog',myT:'Mis tareas',asgn:'{n} tareas',allT:'Todas',myOnly:'Asignadas a mi',pOk:'Pipeline OK',nErr:'0 errores',tsk:'Tareas',stp:'PASO',wh:'Que hay que hacer',spO:'Objetivo de la investigacion',crit:'Criterios para dar por terminado',spD:'Entregables esperados',fig:'Diseno en Figma',askAI:'Pedile a la IA que empiece',askSp:'Empezar a investigar con la IA',aiH:'Se abre tu chat (Claude, Copilot o Antigravity) con el contexto cargado.',wAI:'Trabaja con la IA',iAI:'Investiga con la IA',clCp:'Click en una sugerencia para copiarla y pegarla en tu chat.',ctxS:'Contexto enviado al asistente',sugL:'Sugerencias — click para copiar:',aiDT:'La IA termino, quiero testear',aiDD:'Ya tengo la info, documentar',testT:'Testear los cambios',testS:'La IA genero tests automaticos. Proba manualmente tambien.',aiTst:'Tests automaticos (IA)',rerun:'Ejecutar de nuevo',tPas:'{n}/{t} tests OK',mPrev:'Vista previa manual',allG:'Todo funciona, revisar',smW:'Algo fallo, volver al chat',docT:'Documentar hallazgos',docS:'Publica el resultado de tu investigacion.',cConf:'Crear pagina en Confluence',cNot:'Crear pagina en Notion',cOS:'Crear spec en OpenSpec',jCom:'Comentario para Jira',pubCl:'Publicar y cerrar ticket',revT:'Revisar y documentar',revS:'Agrega capturas y comentarios a Jira.',evid:'Evidencia',addSS:'Agregar captura',upMR:'Subir evidencia y continuar',mrT:'Crear Merge Request',mrS:'Todo listo para enviar.',branch:'Rama',tests:'Tests',crMR:'Crear Merge Request en GitLab',tDone:'Tarea completada',mrMsg:'Merge Request creado. Ticket movido a "En revision". El pipeline despliega.',spMsg:'Investigacion documentada. Ticket cerrado.',nxtT:'Siguiente tarea',cTls:'Herramientas conectadas',stS:'Administra tus integraciones.',conn:'Conectado',nPS:'Configurar nuevo proyecto',cpd:'Copiado',
     cPop:'Herramientas populares',cPr:'Gestion de proyecto',cCo:'Codigo',cDs:'Diseno',cDc:'Documentacion',cDa:'Base de datos',cMo:'Monitoreo',cCl:'Cloud',
     newTask:'Nueva tarea',delTask:'Eliminar',crTitle:'Crear nueva tarea',crTitleF:'Titulo',crDescF:'Descripcion',crTypeF:'Tipo',crCritF:'Criterios de aceptacion',crAdd:'Agregar criterio',crSave:'Crear tarea',crCancel:'Cancelar',noTasks:'No hay tareas. Crea una nueva.',
-    vsPluginDetected:'Plugin VS Code detectado',openBrw:'Abriendo navegador...',assigned:'Asignado a'
+    vsPluginDetected:'Plugin VS Code detectado',openBrw:'Abriendo navegador...',assigned:'Asignado a',
+    envT:'Entorno local & Docker',envS:'Levanta bases de datos y servicios en tu maquina en 1 clic.',docStatus:'Estado de Docker',docInst:'Instalar Docker con Homebrew (Terminal)',docInstDesc:'Docker te permite correr bases de datos (Postgres, MySQL) y tu app localmente sin configurar nada.',docStart:'Iniciar Docker Desktop',docDwn:'Descargar instalador oficial (.dmg)',docRun:'Docker Desktop activo',docNotRun:'Docker instalado pero apagado',docNotRunDesc:'Docker esta instalado en tu Mac pero la aplicacion no esta abierta.',docNotInst:'Docker no detectado',quickDb:'Bases de datos locales (1 clic)',startComp:'Levantar aplicacion (docker-compose)',actCont:'Contenedores locales activos',noCont:'No hay contenedores corriendo actualmente.',stopBtn:'Detener',checkAgain:'Verificar de nuevo'
   },
   en:{
     newP:'New project',reconf:'Reconfigure',obS:'Step {n} of {t}',obT1:'What tools does your team use?',obS1:'Select the ones you want to connect.',obSrch:'Search tools...',obSel:'{n} selected',cont:'Continue',back:'Back',obT2:'Connect your Jira',obS2:'Enter domain and project.',obJD:'Jira domain',obPr:'Project',obCA:'Connect with Atlassian in browser',obT3:'Connect your repository',obS3:'Link the project repository.',obPv:'Provider',obRe:'Repository',obGo:'Start working',
     backlog:'Backlog',myT:'My tasks',asgn:'{n} tasks',allT:'All',myOnly:'Assigned to me',pOk:'Pipeline OK',nErr:'0 errors',tsk:'Tasks',stp:'STEP',wh:'What needs to be done',spO:'Investigation objective',crit:'Acceptance criteria',spD:'Expected deliverables',fig:'Figma design',askAI:'Ask the AI to start',askSp:'Start investigating with AI',aiH:'Opens your AI chat (Claude, Copilot or Antigravity) with context loaded.',wAI:'Work with AI',iAI:'Investigate with AI',clCp:'Click a suggestion to copy and paste in your AI chat.',ctxS:'Context sent to assistant',sugL:'Suggestions — click to copy:',aiDT:"AI is done, let's test",aiDD:"Got the info, document",testT:'Test the changes',testS:'AI generated automated tests. You can also test manually.',aiTst:'Automated tests (AI)',rerun:'Re-run',tPas:'{n}/{t} tests OK',mPrev:'Manual preview',allG:"All good, let's review",smW:'Something failed, back to chat',docT:'Document findings',docS:'Publish your research results.',cConf:'Create Confluence page',cNot:'Create Notion page',cOS:'Create OpenSpec spec',jCom:'Jira comment',pubCl:'Publish and close ticket',revT:'Review and document',revS:'Add screenshots and comments to Jira.',evid:'Evidence',addSS:'Add screenshot',upMR:'Upload evidence and continue',mrT:'Create Merge Request',mrS:'All set to submit.',branch:'Branch',tests:'Tests',crMR:'Create Merge Request on GitLab',tDone:'Task completed',mrMsg:'MR created. Ticket moved to "In Review". Pipeline handles deploy.',spMsg:'Research documented. Ticket closed.',nxtT:'Next task',cTls:'Connected tools',stS:'Manage your integrations.',conn:'Connected',nPS:'Set up new project',cpd:'Copied',
     cPop:'Popular tools',cPr:'Project management',cCo:'Code',cDs:'Design',cDc:'Documentation',cDa:'Database',cMo:'Monitoring',cCl:'Cloud',
     newTask:'New task',delTask:'Delete',crTitle:'Create new task',crTitleF:'Title',crDescF:'Description',crTypeF:'Type',crCritF:'Acceptance criteria',crAdd:'Add criterion',crSave:'Create task',crCancel:'Cancel',noTasks:'No tasks yet. Create one.',
-    vsPluginDetected:'VS Code plugin detected',openBrw:'Opening browser...',assigned:'Assigned to'
+    vsPluginDetected:'VS Code plugin detected',openBrw:'Opening browser...',assigned:'Assigned to',
+    envT:'Local Environment & Docker',envS:'Launch local databases and services on your machine in 1 click.',docStatus:'Docker Status',docInst:'Install Docker with Homebrew (Terminal)',docInstDesc:'Docker allows you to run databases (Postgres, MySQL) and your app locally without manual config.',docStart:'Start Docker Desktop',docDwn:'Download official installer (.dmg)',docRun:'Docker Desktop running',docNotRun:'Docker installed but stopped',docNotRunDesc:'Docker is installed on your Mac but the app is not open.',docNotInst:'Docker not detected',quickDb:'Local databases (1 click)',startComp:'Start application (docker-compose)',actCont:'Active local containers',noCont:'No containers currently running.',stopBtn:'Stop',checkAgain:'Check again'
   }
 };
 function t(k,v){let s=(D[L]&&D[L][k])||k;if(v)Object.entries(v).forEach(([a,b])=>{s=s.replace('{'+a+'}',b)});return s}
@@ -429,10 +546,19 @@ function saveTasks(){vsc.postMessage({type:'saveTasks',tasks})}
 
 // Screen management
 function showScr(n){
-  ['sOb','sHome','sTk','sSet','sCreate'].forEach(id=>document.getElementById(id).style.display='none');
-  const map={onboarding:'sOb',home:'sHome',ticket:'sTk',settings:'sSet',create:'sCreate'};
-  document.getElementById(map[n]).style.display='';
-  if(n==='onboarding')rOb();if(n==='home')rHome();if(n==='settings')rSet();if(n==='create')rCreate();
+  ['sOb','sHome','sTk','sSet','sCreate','sEnv'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display='none';
+  });
+  const map={onboarding:'sOb',home:'sHome',ticket:'sTk',settings:'sSet',create:'sCreate',env:'sEnv'};
+  if(map[n] && document.getElementById(map[n])) {
+    document.getElementById(map[n]).style.display='';
+  }
+  if(n==='onboarding')rOb();
+  if(n==='home')rHome();
+  if(n==='settings')rSet();
+  if(n==='create')rCreate();
+  if(n==='env')rEnv();
   updTop();
 }
 function updTop(){
@@ -818,6 +944,153 @@ function addSS(){
   vsc.postMessage({ type: 'pickEvidenceFiles', ticketId: aTk });
 }
 
+// ---- LOCAL ENVIRONMENT & DOCKER ----
+let dockerStatus = { installed: false, running: false, version: '' };
+let dockerContainers = [];
+
+function rEnv(){
+  const el = document.getElementById('sEnv');
+  if (!el) return;
+  let statusBadge = '';
+  let statusCard = '';
+
+  if (dockerStatus.running) {
+    statusBadge = '<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981">'+t('docRun')+'</span>';
+    statusCard = '<div class="card card-bg" style="border-color:rgba(16,185,129,.3)">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'+
+        '<div style="display:flex;align-items:center;gap:8px">'+lg.Docker+'<strong style="font-size:13px">'+t('docStatus')+'</strong></div>'+
+        statusBadge +
+      '</div>'+
+      '<div style="font-size:11px;color:var(--vscode-descriptionForeground);font-family:monospace">'+(dockerStatus.version || 'Docker Desktop')+'</div>'+
+    '</div>';
+  } else if (dockerStatus.installed) {
+    statusBadge = '<span class="badge" style="background:rgba(245,158,11,.15);color:#f59e0b">'+t('docNotRun')+'</span>';
+    statusCard = '<div class="card card-bg" style="border-color:rgba(245,158,11,.3)">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'+
+        '<div style="display:flex;align-items:center;gap:8px">'+lg.Docker+'<strong style="font-size:13px">'+t('docStatus')+'</strong></div>'+
+        statusBadge +
+      '</div>'+
+      '<p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:12px">'+t('docNotRunDesc')+'</p>'+
+      '<div style="display:flex;gap:8px">'+
+        '<button class="bp" onclick="startDockerApp()">'+svgPlay+' '+t('docStart')+'</button>'+
+        '<button class="bs" onclick="refreshDocker()">'+t('checkAgain')+'</button>'+
+      '</div>'+
+    '</div>';
+  } else {
+    statusBadge = '<span class="badge" style="background:rgba(239,68,68,.15);color:#ef4444">'+t('docNotInst')+'</span>';
+    statusCard = '<div class="card card-bg" style="border-color:rgba(239,68,68,.3)">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'+
+        '<div style="display:flex;align-items:center;gap:8px">'+lg.Docker+'<strong style="font-size:13px">'+t('docStatus')+'</strong></div>'+
+        statusBadge +
+      '</div>'+
+      '<p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:12px">'+t('docInstDesc')+'</p>'+
+      '<div style="display:flex;flex-direction:column;gap:8px">'+
+        '<button class="bp" onclick="installDockerBrew()">'+svgTerm+' '+t('docInst')+'</button>'+
+        '<button class="bs" onclick="openDockerDownload()">'+svgExtLink+' '+t('docDwn')+'</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  let h = '<div class="ctr fi">';
+  h += '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:12px">'+
+    '<button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">'+svgBack+t('back')+'</button>'+
+    '<span style="color:var(--vscode-panel-border)">/</span>'+
+    '<span style="font-weight:600">'+t('envT')+'</span>'+
+  '</div>';
+
+  h += '<h1 style="font-size:18px;font-weight:700;margin-bottom:4px">'+t('envT')+'</h1>';
+  h += '<p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('envS')+'</p>';
+
+  h += statusCard;
+
+  // Databases section
+  h += '<div style="font-size:13px;font-weight:700;margin:18px 0 8px;display:flex;align-items:center;gap:6px">'+svgDb+' '+t('quickDb')+'</div>';
+  
+  // PostgreSQL
+  h += '<div class="card card-bg" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'+
+    '<div style="display:flex;align-items:center;gap:8px">'+
+      lg.PostgreSQL +
+      '<div><div style="font-size:13px;font-weight:600">PostgreSQL (v16)</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">localhost:5432 · postgres / postgres</div></div>'+
+    '</div>'+
+    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="launchService(\'postgres\')">'+svgPlay+' '+(L==='es'?'Iniciar':'Start')+'</button>'+
+  '</div>';
+
+  // MySQL
+  h += '<div class="card card-bg" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'+
+    '<div style="display:flex;align-items:center;gap:8px">'+
+      lg.MySQL +
+      '<div><div style="font-size:13px;font-weight:600">MySQL (v8)</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">localhost:3306 · root / mysql</div></div>'+
+    '</div>'+
+    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="launchService(\'mysql\')">'+svgPlay+' '+(L==='es'?'Iniciar':'Start')+'</button>'+
+  '</div>';
+
+  // Redis
+  h += '<div class="card card-bg" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'+
+    '<div style="display:flex;align-items:center;gap:8px">'+
+      svgRedis +
+      '<div><div style="font-size:13px;font-weight:600">Redis</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">localhost:6379 · Cache & KV</div></div>'+
+    '</div>'+
+    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="launchService(\'redis\')">'+svgPlay+' '+(L==='es'?'Iniciar':'Start')+'</button>'+
+  '</div>';
+
+  // Full App Compose
+  h += '<div class="card card-bg" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'+
+    '<div style="display:flex;align-items:center;gap:8px">'+
+      lg.Docker +
+      '<div><div style="font-size:13px;font-weight:600">'+t('startComp')+'</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">docker compose up -d</div></div>'+
+    '</div>'+
+    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="launchService(\'compose\')">'+svgPlay+' '+(L==='es'?'Levantar':'Up')+'</button>'+
+  '</div>';
+
+  // Active containers
+  h += '<div style="font-size:13px;font-weight:700;margin:18px 0 8px;display:flex;align-items:center;justify-content:space-between"><span>'+t('actCont')+' ('+dockerContainers.length+')</span><button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" onclick="refreshDocker()">'+t('checkAgain')+'</button></div>';
+  if (dockerContainers.length === 0) {
+    h += '<p style="font-size:12px;color:var(--vscode-descriptionForeground);padding:10px 0">'+t('noCont')+'</p>';
+  } else {
+    dockerContainers.forEach(c => {
+      const isUp = c.status && c.status.toLowerCase().includes('up');
+      h += '<div class="card card-bg" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">'+
+        '<div>'+
+          '<div style="font-size:12px;font-weight:700;font-family:monospace;display:flex;align-items:center;gap:6px">'+
+            '<span class="sd '+(isUp?'sd-d':'sd-p')+'"></span>'+
+            c.name.replace(/^\//,'') +
+            '<span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:normal">('+c.image+')</span>'+
+          '</div>'+
+          '<div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:2px">'+(c.ports || c.status)+'</div>'+
+        '</div>'+
+        '<button class="del-btn" style="padding:4px 8px;font-size:11px" onclick="stopContainer(\''+c.id+'\')">'+t('stopBtn')+'</button>'+
+      '</div>';
+    });
+  }
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function startDockerApp(){
+  vsc.postMessage({ type: 'startDockerDaemon' });
+  toast(L==='es'?'Iniciando Docker Desktop...':'Starting Docker Desktop...');
+}
+function installDockerBrew(){
+  vsc.postMessage({ type: 'installDocker' });
+  toast(L==='es'?'Abriendo terminal de instalacion...':'Opening install terminal...');
+}
+function openDockerDownload(){
+  vsc.postMessage({ type: 'openExternal', url: 'https://www.docker.com/products/docker-desktop/' });
+}
+function launchService(s){
+  vsc.postMessage({ type: 'launchDockerService', service: s });
+  toast(L==='es'?'Iniciando servicio...':'Starting service...');
+}
+function stopContainer(id){
+  vsc.postMessage({ type: 'stopDockerContainer', containerId: id });
+  toast(L==='es'?'Deteniendo contenedor...':'Stopping container...');
+}
+function refreshDocker(){
+  vsc.postMessage({ type: 'checkDocker' });
+  toast(L==='es'?'Verificando...':'Checking...');
+}
+
 // ---- SETTINGS ----
 function rSet(){
   let h='<div class="ctr fi"><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('cTls')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('stS')+'</p>';
@@ -862,10 +1135,24 @@ window.addEventListener('message',e=>{
       toast(L==='es'?'Evidencia adjuntada':'Evidence attached');
     }
   }
+  if(e.data.type==='dockerInfo'){
+    dockerStatus = e.data.status || { installed: false, running: false, version: '' };
+    dockerContainers = e.data.containers || [];
+    const dot = document.getElementById('envDot');
+    if(dot){
+      dot.className = 'sd ' + (dockerStatus.running ? 'sd-d' : dockerStatus.installed ? 'sd-a' : 'sd-p');
+      dot.style.background = dockerStatus.running ? '#10b981' : dockerStatus.installed ? '#f59e0b' : 'var(--vscode-descriptionForeground)';
+    }
+    const envScr = document.getElementById('sEnv');
+    if(envScr && envScr.style.display !== 'none'){
+      rEnv();
+    }
+  }
 });
 
 // Init
 updTop();
+vsc.postMessage({ type: 'checkDocker' });
 if(onb){
   document.getElementById('topAct').style.display='flex';
   document.getElementById('topLbl').innerText='· PROJ / checkout';
