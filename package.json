@@ -1,7 +1,7 @@
 {
   "name": "product-studio",
   "displayName": "Product Studio",
-  "description": "Simplified IDE experience for Product Engineers: work on Jira tickets with AI, test, review and submit merge requests. No coding experience required.",
+  "description": "Simplified IDE experience for Product Engineers: work on Jira tickets with AI, test, review and submit merge requests.",
   "version": "1.7.0",
   "publisher": "product-engineering",
   "license": "MIT",
