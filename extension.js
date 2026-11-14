@@ -464,6 +464,9 @@ select.inp{cursor:pointer}
 .task-card{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:12px 14px;margin-bottom:8px;background:var(--vscode-sideBar-background);cursor:pointer;transition:all .15s ease;display:flex;align-items:center;gap:12px}
 .task-card:hover{border-color:var(--vscode-focusBorder);background:rgba(255,255,255,.04);transform:translateY(-1px)}
 .task-card:active{transform:translateY(0)}
+.epic-card{border:1px solid var(--vscode-panel-border);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--vscode-sideBar-background);cursor:pointer;transition:all .15s ease}
+.epic-card:hover{border-color:var(--vscode-focusBorder);background:rgba(255,255,255,.04);transform:translateY(-1px)}
+.epic-card:active{transform:translateY(0)}
 .seg-tabs{display:flex;gap:4px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-radius:6px;padding:3px;font-size:12px}
 .seg-tab{padding:5px 12px;border-radius:5px;cursor:pointer;border:none;background:transparent;color:var(--vscode-descriptionForeground);font-weight:600;display:flex;align-items:center;gap:6px;font-size:12px;flex:1;justify-content:center}
 .seg-tab.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
@@ -692,11 +695,20 @@ const defaultMilestones = {
 
 let epics = defaultEpics;
 let milestones = defaultMilestones;
-let homeTab = 'me'; // 'me' | 'all' | 'roadmap'
-let epicFilter = 'all'; // 'all' | 'EPIC-10' | 'EPIC-12' | 'EPIC-15'
+let selectedEpicId = null; // null = list of epics; string = tasks in that epic
+let mainViewMode = 'epics'; // 'epics' | 'allTasks'
 
-function setHomeTab(tab){homeTab=tab;rHome();}
-function setEpicFilter(eid){epicFilter=eid;rHome();}
+function openEpic(eid){selectedEpicId = eid; rHome();}
+function closeEpic(){selectedEpicId = null; rHome();}
+function setMainViewMode(mode){mainViewMode = mode; selectedEpicId = null; rHome();}
+function createTaskInEpic(eid){
+  selectedEpicId = eid;
+  showScr('create');
+  setTimeout(()=>{
+    const sel = document.getElementById('nEpic');
+    if(sel) sel.value = eid;
+  }, 10);
+}
 
 function renderScreenThumbSvg(name, title) {
   return '<svg viewBox="0 0 240 140" width="100%" height="90" style="background:#090d16;display:block">' +
@@ -1108,6 +1120,7 @@ function finOb(){
   document.getElementById('topLbl').innerText='· PROJ / checkout';
   vsc.postMessage({type:'finishOnboarding',tools:cTools,activeAi:activeAi});
   updTop();
+  selectedEpicId = null;
   showScr('home');
   toast(L==='es'?'Proyecto configurado':'Project configured');
 }
@@ -1133,13 +1146,11 @@ function renderTaskCard(id) {
     stCol = '#c084fc';
   }
 
-  const epic = epics[tk.epicId];
-  const epicName = epic ? (epic.name[L] || epic.name.es || epic.name) : '';
   const testCount = tk.tests ? tk.tests.length : 3;
   const ssCount = tk.screenshots ? tk.screenshots.length : 2;
   const isMine = tk.assignedTo === 'me';
 
-  return '<div class="task-card" onclick="openTk(\'' + id + '\')" title="' + (L === 'es' ? 'Abrir tarea' : 'Open task') + '">' +
+  return '<div class="task-card" onclick="openTk(\'' + id + '\')" title="' + (L === 'es' ? 'Click para trabajar en tarea' : 'Click to work on task') + '">' +
     '<span class="badge" style="background:' + stBg + ';color:' + stCol + ';flex-shrink:0">' + status + '</span>' +
     '<div style="flex:1;min-width:0">' +
       '<div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px">' +
@@ -1147,16 +1158,17 @@ function renderTaskCard(id) {
         '<span style="overflow:hidden;text-overflow:ellipsis">' + title + '</span>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--vscode-descriptionForeground)">' +
-        (epicName ? '<span class="badge" style="background:rgba(139,92,246,.1);color:#c084fc;padding:1px 5px">' + epicName + '</span><span>·</span>' : '') +
         '<span style="color:#10b981;font-weight:600">' + svgCheck + ' ' + testCount + ' tests</span>' +
         '<span>·</span>' +
         '<span style="color:#38bdf8">' + ssCount + ' ' + (L === 'es' ? 'capturas' : 'captures') + '</span>' +
-        (isMine && homeTab === 'all' ? '<span>·</span><span style="color:#10b981;font-weight:600">' + (L === 'es' ? 'Para ti' : 'Yours') + '</span>' : '') +
+        (isMine ? '<span>·</span><span style="color:#10b981;font-weight:600">' + (L === 'es' ? 'Para ti' : 'Yours') + '</span>' : '') +
       '</div>' +
     '</div>' +
-    '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">' +
+    '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+      '<span class="badge" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:4px 8px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px">' +
+        (L === 'es' ? 'Trabajar' : 'Work') + ' ' + svgChev +
+      '</span>' +
       '<button class="del-btn" onclick="event.stopPropagation();delTk(\'' + id + '\')" title="' + t('delTask') + '">' + svgDel + '</button>' +
-      svgChev +
     '</div>' +
   '</div>';
 }
@@ -1166,91 +1178,86 @@ function rHome(){
   const allIds = Object.keys(tasks);
   allIds.forEach(id => ensureTaskEnrichment(tasks[id], id));
 
-  const myTasks = allIds.filter(id => tasks[id].assignedTo === 'me');
-  const myCount = myTasks.length;
-  const allCount = allIds.length;
-
-  let baseIds = (homeTab === 'me') ? myTasks : allIds;
-  if (epicFilter !== 'all') {
-    baseIds = baseIds.filter(id => tasks[id].epicId === epicFilter);
-  }
-
   let h = '<div class="ctr fi">';
-  
-  // Header: Clean title + New task button
-  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
-  h += '<div>';
-  h += '<h1 style="font-size:18px;font-weight:700">' + t('backlog') + '</h1>';
-  h += '<div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:2px">Sprint 24 · ' + (L === 'es' ? myCount + ' para ti de ' + allCount + ' tareas' : myCount + ' for you of ' + allCount + ' tasks') + '</div>';
-  h += '</div>';
-  h += '<button class="bp" style="width:auto;padding:6px 14px;font-size:12px" onclick="showScr(\'create\')">' + svgPlus + ' ' + t('newTask') + '</button>';
-  h += '</div>';
 
-  // Segmented Control: [Mis tareas] [Todas] [Roadmap Q1]
-  h += '<div class="seg-tabs" style="margin-bottom:12px">';
-  h += '<button class="seg-tab ' + (homeTab === 'me' ? 'active' : '') + '" onclick="setHomeTab(\'me\')">' + t('myOnly') + ' (' + myCount + ')</button>';
-  h += '<button class="seg-tab ' + (homeTab === 'all' ? 'active' : '') + '" onclick="setHomeTab(\'all\')">' + t('allT') + ' (' + allCount + ')</button>';
-  h += '<button class="seg-tab ' + (homeTab === 'roadmap' ? 'active' : '') + '" onclick="setHomeTab(\'roadmap\')">' + svgRoadmap + ' Roadmap Q1</button>';
-  h += '</div>';
-
-  if (homeTab === 'roadmap') {
-    // Clean Roadmap view
-    const activeM = milestones['M-1'];
-    const mProg = getMilestoneProgress('M-1');
-
-    h += '<div class="card card-bg" style="border-color:rgba(139,92,246,.3);margin-bottom:12px">';
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
-    h += '<div style="display:flex;align-items:center;gap:6px">';
-    h += '<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981">' + activeM.quarter + '</span>';
-    h += '<strong style="font-size:13px">' + (activeM.title[L] || activeM.title.es || activeM.title.en) + '</strong>';
+  if (selectedEpicId === null) {
+    // LEVEL 1: Listado de Épicas
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">';
+    h += '<div>';
+    h += '<h1 style="font-size:18px;font-weight:700">' + (L === 'es' ? 'Épicas del Proyecto' : 'Project Epics') + '</h1>';
+    h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:2px">' + (L === 'es' ? 'Selecciona una épica para ver sus tareas' : 'Select an epic to view its tasks') + '</div>';
     h += '</div>';
-    h += '<span style="font-size:12px;font-weight:700;color:#10b981">' + mProg.pct + '%</span>';
-    h += '</div>';
-    h += '<div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-bottom:8px">' + (activeM.desc[L] || activeM.desc.es || activeM.desc.en) + ' · ' + (L === 'es' ? 'Objetivo: ' : 'Target: ') + activeM.targetDate + '</div>';
-    h += '<div class="pbar"><div class="pbar-fill" style="width:' + mProg.pct + '%"></div></div>';
+    h += '<button class="bp" style="width:auto;padding:6px 14px;font-size:12px" onclick="showScr(\'create\')">' + svgPlus + ' ' + t('newTask') + '</button>';
     h += '</div>';
 
-    // Epics inside Roadmap
     Object.keys(epics).forEach(eid => {
       const ep = epics[eid];
       const epProg = getEpicProgress(eid);
-      const epTasks = allIds.filter(id => tasks[id].epicId === eid);
+      const mstone = milestones[ep.milestoneId];
 
-      h += '<div style="margin-bottom:12px">';
-      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:0 2px">';
-      h += '<div style="display:flex;align-items:center;gap:6px">';
-      h += '<span style="width:8px;height:8px;border-radius:2px;background:' + ep.color + '"></span>';
-      h += '<span style="font-family:monospace;font-size:11px;font-weight:700">' + ep.id + '</span>';
-      h += '<strong style="font-size:12px">' + (ep.name[L] || ep.name.es || ep.name) + '</strong>';
+      h += '<div class="epic-card" onclick="openEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Ver tareas de ' + (ep.name[L] || ep.name.es || ep.name) : 'View tasks for ' + (ep.name[L] || ep.name.en || ep.name)) + '">';
+      h += '<div style="display:flex;align-items:center;gap:12px">';
+      h += '<span style="width:12px;height:12px;border-radius:3px;background:' + ep.color + ';flex-shrink:0"></span>';
+      h += '<div style="flex:1;min-width:0">';
+      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+      h += '<span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--vscode-textLink-foreground)">' + ep.id + '</span>';
+      h += '<strong style="font-size:14px">' + (ep.name[L] || ep.name.es || ep.name) + '</strong>';
+      if (mstone) {
+        h += '<span class="badge" style="background:rgba(59,130,246,.12);color:#60a5fa">' + mstone.quarter + '</span>';
+      }
       h += '</div>';
-      h += '<span style="font-size:11px;color:#10b981;font-weight:600">' + epProg.done + '/' + epProg.total + ' (' + epProg.pct + '%)</span>';
+      h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">' + (ep.summary[L] || ep.summary.es || ep.summary) + '</div>';
+      h += '<div style="display:flex;align-items:center;gap:10px">';
+      h += '<span style="font-size:11px;color:#10b981;font-weight:600">' + epProg.done + '/' + epProg.total + ' ' + t('tsk') + ' (' + epProg.pct + '%)</span>';
+      h += '<div class="pbar" style="width:120px;margin-top:0"><div class="pbar-fill" style="width:' + epProg.pct + '%"></div></div>';
       h += '</div>';
-
-      epTasks.forEach(id => {
-        h += renderTaskCard(id);
-      });
+      h += '</div>';
+      h += '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">';
+      h += '<span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">' + (L === 'es' ? 'Ver tareas' : 'View tasks') + '</span>';
+      h += svgChev;
+      h += '</div>';
+      h += '</div>';
       h += '</div>';
     });
 
   } else {
-    // Card list view (Mis tareas o Todas)
-    // Horizontal Epic Filter Chips
-    h += '<div class="epic-chips">';
-    h += '<button class="epic-chip ' + (epicFilter === 'all' ? 'active' : '') + '" onclick="setEpicFilter(\'all\')">' + (L === 'es' ? 'Todas las Epics' : 'All Epics') + '</button>';
-    Object.keys(epics).forEach(eid => {
-      const ep = epics[eid];
-      const isSel = epicFilter === eid;
-      h += '<button class="epic-chip ' + (isSel ? 'active' : '') + '" onclick="setEpicFilter(\'' + eid + '\')">' + (ep.name[L] || ep.name.es || ep.name) + '</button>';
-    });
+    // LEVEL 2: Tareas de la Épica seleccionada
+    const ep = epics[selectedEpicId] || { id: selectedEpicId, name: { es: selectedEpicId, en: selectedEpicId }, color: '#3b82f6', summary: { es: '', en: '' }, lead: '' };
+    const epProg = getEpicProgress(selectedEpicId);
+    const epTasks = allIds.filter(id => tasks[id].epicId === selectedEpicId);
+
+    h += '<div style="margin-bottom:14px">';
+    h += '<button class="bs" style="width:auto;display:inline-flex;padding:5px 12px;font-size:12px;margin-bottom:10px" onclick="closeEpic()">';
+    h += svgBack + ' ' + (L === 'es' ? 'Volver al listado de Épicas' : 'Back to Epics list');
+    h += '</button>';
+    
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
+    h += '<div>';
+    h += '<div style="display:flex;align-items:center;gap:8px">';
+    h += '<span style="width:10px;height:10px;border-radius:2px;background:' + ep.color + '"></span>';
+    h += '<span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--vscode-textLink-foreground)">' + ep.id + '</span>';
+    h += '<h1 style="font-size:18px;font-weight:700;margin:0">' + (ep.name[L] || ep.name.es || ep.name) + '</h1>';
+    h += '</div>';
+    h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:4px">' + (ep.summary[L] || ep.summary.es || ep.summary) + (ep.lead ? ' · <em>' + ep.lead + '</em>' : '') + '</div>';
+    h += '</div>';
+    h += '<button class="bp" style="width:auto;padding:6px 12px;font-size:12px" onclick="createTaskInEpic(\'' + selectedEpicId + '\')">';
+    h += svgPlus + ' ' + t('newTask');
+    h += '</button>';
     h += '</div>';
 
-    if (baseIds.length === 0) {
+    h += '<div style="display:flex;align-items:center;gap:10px;margin-top:10px">';
+    h += '<span style="font-size:11px;color:#10b981;font-weight:600">' + epProg.done + '/' + epProg.total + ' ' + (L === 'es' ? 'tareas completadas o en revisión' : 'tasks done or in review') + ' (' + epProg.pct + '%)</span>';
+    h += '<div class="pbar" style="width:140px;margin-top:0"><div class="pbar-fill" style="width:' + epProg.pct + '%"></div></div>';
+    h += '</div>';
+    h += '</div>';
+
+    if (epTasks.length === 0) {
       h += '<div style="text-align:center;padding:30px 10px;color:var(--vscode-descriptionForeground)">';
-      h += '<p style="font-size:13px;margin-bottom:8px">' + (L === 'es' ? 'No hay tareas para este filtro.' : 'No tasks match this filter.') + '</p>';
-      h += '<button class="bs" style="display:inline-flex;width:auto;padding:6px 12px;font-size:12px" onclick="setEpicFilter(\'all\')">' + (L === 'es' ? 'Mostrar todas' : 'Show all') + '</button>';
+      h += '<p style="font-size:13px;margin-bottom:8px">' + (L === 'es' ? 'No hay tareas creadas en esta épica todavía.' : 'No tasks created in this epic yet.') + '</p>';
+      h += '<button class="bp" style="display:inline-flex;width:auto;padding:6px 14px;font-size:12px" onclick="createTaskInEpic(\'' + selectedEpicId + '\')">' + svgPlus + ' ' + t('newTask') + '</button>';
       h += '</div>';
     } else {
-      baseIds.forEach(id => {
+      epTasks.forEach(id => {
         h += renderTaskCard(id);
       });
     }
@@ -1314,6 +1321,7 @@ function saveNewTask(){
   tasks[id]=newTask;
   saveTasks();
   toast((L==='es'?'Tarea creada: ':'Task created: ')+id);
+  selectedEpicId=epicId;
   showScr('home');
 }
 

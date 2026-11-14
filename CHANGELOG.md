@@ -2,6 +2,15 @@
 
 All notable changes to Product Studio are documented here.
 
+## [1.8.2] - 2026-11-14
+
+### Added
+- **Direct 2-Level Epics & Tasks Drill-Down Navigation**:
+  - Level 1: Clean, clickable **Listado de Épicas** (`.epic-card`) displaying each Epic's ID, color, name, quarter milestone, and progress bar (`X/Y tareas`).
+  - Click on an Epic: Transitions smoothly into **Tareas de la Épica**, showing the Epic's goal, lead, progress bar, and list of tasks.
+  - Click on a Task or "Trabajar ›": Direct entry into the step-by-step ticket workspace (AI prompt -> Coding -> Automated testing -> Review & evidence -> GitLab MR).
+  - Breadcrumb back navigation: `‹ Volver al listado de Épicas` to return effortlessly to the main Epics overview.
+
 ## [1.8.1] - 2026-11-14
 
 ### Changed
