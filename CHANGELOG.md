@@ -2,6 +2,17 @@
 
 All notable changes to Product Studio are documented here.
 
+## [1.8.1] - 2026-11-14
+
+### Changed
+- **Simplified & High-Contrast Backlog UI**:
+  - Replaced clutter of stacked banners and nested tabs with a clean Linear-style layout.
+  - Unified segmented control: **Mis tareas**, **Todas**, and **Roadmap Q1**.
+  - Interactive `.task-card` items with smooth hover lift (`transform: translateY(-1px)`), clear focus border, and 100% clickable hit target.
+  - Eliminated badge clutter: clean status pill on left, monospace ID + title, and compact subline showing Epic pill, automated tests count, and screenshots.
+  - Fast horizontal Epic filter chips (*Todas las Epics*, *Pasarela Pagos*, *Facturación*, *Rendimiento*) for instant 1-click filtering.
+  - Compact `+ Nueva tarea` button integrated into top header.
+
 ## [1.8.0] - 2026-11-14
 
 ### Added

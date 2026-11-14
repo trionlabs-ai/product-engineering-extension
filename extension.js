@@ -461,18 +461,19 @@ select.inp{cursor:pointer}
 .crit-row button{background:none;border:none;cursor:pointer;color:var(--vscode-descriptionForeground);padding:2px}
 .crit-row button:hover{color:#ef4444}
 .ext-badge{font-size:9px;background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);padding:2px 5px;border-radius:4px;font-weight:600;display:inline-flex;align-items:center;gap:3px}
-.filter-tabs{display:flex;gap:4px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-radius:6px;padding:2px;font-size:11px}
-.filter-tab{padding:4px 10px;border-radius:4px;cursor:pointer;border:none;background:transparent;color:var(--vscode-descriptionForeground);font-weight:600}
-.filter-tab.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
-.view-switch-tabs{display:flex;gap:4px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-radius:6px;padding:3px;font-size:12px;margin-bottom:12px}
-.view-switch-btn{padding:5px 12px;border-radius:5px;cursor:pointer;border:none;background:transparent;color:var(--vscode-descriptionForeground);font-weight:600;display:flex;align-items:center;gap:6px;font-size:12px;flex:1;justify-content:center}
-.view-switch-btn.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
-.view-switch-btn:hover:not(.active){color:var(--vscode-foreground);background:rgba(255,255,255,.04)}
-.roadmap-strip{background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(139,92,246,.08));border:1px solid rgba(139,92,246,.25);border-radius:8px;padding:10px 14px;margin-bottom:12px;cursor:pointer;transition:border-color .15s}
-.roadmap-strip:hover{border-color:var(--vscode-focusBorder)}
+.task-card{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:12px 14px;margin-bottom:8px;background:var(--vscode-sideBar-background);cursor:pointer;transition:all .15s ease;display:flex;align-items:center;gap:12px}
+.task-card:hover{border-color:var(--vscode-focusBorder);background:rgba(255,255,255,.04);transform:translateY(-1px)}
+.task-card:active{transform:translateY(0)}
+.seg-tabs{display:flex;gap:4px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-radius:6px;padding:3px;font-size:12px}
+.seg-tab{padding:5px 12px;border-radius:5px;cursor:pointer;border:none;background:transparent;color:var(--vscode-descriptionForeground);font-weight:600;display:flex;align-items:center;gap:6px;font-size:12px;flex:1;justify-content:center}
+.seg-tab.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
+.seg-tab:hover:not(.active){color:var(--vscode-foreground);background:rgba(255,255,255,.04)}
+.epic-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+.epic-chip{font-size:11px;padding:4px 10px;border-radius:12px;border:1px solid var(--vscode-panel-border);background:var(--vscode-sideBar-background);color:var(--vscode-descriptionForeground);cursor:pointer;white-space:nowrap;font-weight:500}
+.epic-chip.active{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.4);color:#60a5fa;font-weight:600}
+.epic-chip:hover:not(.active){border-color:var(--vscode-descriptionForeground);color:var(--vscode-foreground)}
 .pbar{height:6px;background:var(--vscode-panel-border);border-radius:3px;overflow:hidden;margin-top:6px}
 .pbar-fill{height:100%;background:#10b981;border-radius:3px;transition:width .3s}
-.epic-box{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--vscode-sideBar-background)}
 .test-box{border:1px solid var(--vscode-panel-border);border-radius:6px;padding:8px 10px;margin-bottom:6px;background:var(--vscode-sideBar-background);display:flex;align-items:center;justify-content:space-between}
 .ss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:8px 0}
 .ss-card{border:1px solid var(--vscode-panel-border);border-radius:6px;overflow:hidden;background:var(--vscode-sideBar-background);font-size:11px}
@@ -691,9 +692,11 @@ const defaultMilestones = {
 
 let epics = defaultEpics;
 let milestones = defaultMilestones;
-let homeView = 'cards'; // 'cards' | 'epics' | 'roadmap'
+let homeTab = 'me'; // 'me' | 'all' | 'roadmap'
+let epicFilter = 'all'; // 'all' | 'EPIC-10' | 'EPIC-12' | 'EPIC-15'
 
-function setHomeView(v){homeView=v;rHome();}
+function setHomeTab(tab){homeTab=tab;rHome();}
+function setEpicFilter(eid){epicFilter=eid;rHome();}
 
 function renderScreenThumbSvg(name, title) {
   return '<svg viewBox="0 0 240 140" width="100%" height="90" style="background:#090d16;display:block">' +
@@ -1110,211 +1113,151 @@ function finOb(){
 }
 
 // ---- HOME / BACKLOG ----
-function setFilter(f){
-  filterMode=f;
-  rHome();
+function renderTaskCard(id) {
+  const tk = tasks[id];
+  if (!tk) return '';
+  const title = tk.title[L] || tk.title.es || tk.title.en || tk.title;
+  const status = tk.status[L] || tk.status.es || tk.status.en || tk.status;
+  const stLower = (status || '').toLowerCase();
+  
+  let stBg = 'rgba(59,130,246,.12)';
+  let stCol = '#60a5fa';
+  if (stLower.includes('revis') || stLower.includes('review')) {
+    stBg = 'rgba(245,158,11,.15)';
+    stCol = '#f59e0b';
+  } else if (stLower.includes('backlog')) {
+    stBg = 'rgba(148,163,184,.12)';
+    stCol = '#94a3b8';
+  } else if (tk.type === 'spike') {
+    stBg = 'rgba(139,92,246,.15)';
+    stCol = '#c084fc';
+  }
+
+  const epic = epics[tk.epicId];
+  const epicName = epic ? (epic.name[L] || epic.name.es || epic.name) : '';
+  const testCount = tk.tests ? tk.tests.length : 3;
+  const ssCount = tk.screenshots ? tk.screenshots.length : 2;
+  const isMine = tk.assignedTo === 'me';
+
+  return '<div class="task-card" onclick="openTk(\'' + id + '\')" title="' + (L === 'es' ? 'Abrir tarea' : 'Open task') + '">' +
+    '<span class="badge" style="background:' + stBg + ';color:' + stCol + ';flex-shrink:0">' + status + '</span>' +
+    '<div style="flex:1;min-width:0">' +
+      '<div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px">' +
+        '<span style="font-family:monospace;color:var(--vscode-textLink-foreground);font-weight:700">' + id + '</span>' +
+        '<span style="overflow:hidden;text-overflow:ellipsis">' + title + '</span>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--vscode-descriptionForeground)">' +
+        (epicName ? '<span class="badge" style="background:rgba(139,92,246,.1);color:#c084fc;padding:1px 5px">' + epicName + '</span><span>·</span>' : '') +
+        '<span style="color:#10b981;font-weight:600">' + svgCheck + ' ' + testCount + ' tests</span>' +
+        '<span>·</span>' +
+        '<span style="color:#38bdf8">' + ssCount + ' ' + (L === 'es' ? 'capturas' : 'captures') + '</span>' +
+        (isMine && homeTab === 'all' ? '<span>·</span><span style="color:#10b981;font-weight:600">' + (L === 'es' ? 'Para ti' : 'Yours') + '</span>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">' +
+      '<button class="del-btn" onclick="event.stopPropagation();delTk(\'' + id + '\')" title="' + t('delTask') + '">' + svgDel + '</button>' +
+      svgChev +
+    '</div>' +
+  '</div>';
 }
+
 function rHome(){
-  const el=document.getElementById('sHome');
-  const allIds=Object.keys(tasks);
-  allIds.forEach(id=>ensureTaskEnrichment(tasks[id],id));
-  const ids = filterMode === 'me' ? allIds.filter(id => tasks[id].assignedTo === 'me') : allIds;
+  const el = document.getElementById('sHome');
+  const allIds = Object.keys(tasks);
+  allIds.forEach(id => ensureTaskEnrichment(tasks[id], id));
 
-  let h='<div class="ctr fi">';
+  const myTasks = allIds.filter(id => tasks[id].assignedTo === 'me');
+  const myCount = myTasks.length;
+  const allCount = allIds.length;
+
+  let baseIds = (homeTab === 'me') ? myTasks : allIds;
+  if (epicFilter !== 'all') {
+    baseIds = baseIds.filter(id => tasks[id].epicId === epicFilter);
+  }
+
+  let h = '<div class="ctr fi">';
   
-  // Header with Backlog & Filter
-  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
-  h+='<div><h1 style="font-size:18px;font-weight:700">'+t('backlog')+'</h1><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:2px">Sprint 24 · '+t('asgn',{n:allIds.length})+'</p></div>';
-  
-  // Filter tabs
-  h+='<div class="filter-tabs">';
-  h+='<button class="filter-tab '+(filterMode==='all'?'active':'')+'" onclick="setFilter(\'all\')">'+t('allT')+'</button>';
-  h+='<button class="filter-tab '+(filterMode==='me'?'active':'')+'" onclick="setFilter(\'me\')">'+t('myOnly')+'</button>';
-  h+='</div>';
-  h+='</div>';
+  // Header: Clean title + New task button
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+  h += '<div>';
+  h += '<h1 style="font-size:18px;font-weight:700">' + t('backlog') + '</h1>';
+  h += '<div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:2px">Sprint 24 · ' + (L === 'es' ? myCount + ' para ti de ' + allCount + ' tareas' : myCount + ' for you of ' + allCount + ' tasks') + '</div>';
+  h += '</div>';
+  h += '<button class="bp" style="width:auto;padding:6px 14px;font-size:12px" onclick="showScr(\'create\')">' + svgPlus + ' ' + t('newTask') + '</button>';
+  h += '</div>';
 
-  // View Switcher Tabs: [Tarjetas] [Por Epic] [Roadmap & Milestones]
-  h+='<div class="view-switch-tabs">';
-  h+='<button class="view-switch-btn '+(homeView==='cards'?'active':'')+'" onclick="setHomeView(\'cards\')">'+svgCards+' <span>'+t('viewCards')+'</span></button>';
-  h+='<button class="view-switch-btn '+(homeView==='epics'?'active':'')+'" onclick="setHomeView(\'epics\')">'+svgEpic+' <span>'+t('viewEpics')+'</span></button>';
-  h+='<button class="view-switch-btn '+(homeView==='roadmap'?'active':'')+'" onclick="setHomeView(\'roadmap\')">'+svgRoadmap+' <span>'+t('viewRoadmap')+'</span></button>';
-  h+='</div>';
+  // Segmented Control: [Mis tareas] [Todas] [Roadmap Q1]
+  h += '<div class="seg-tabs" style="margin-bottom:12px">';
+  h += '<button class="seg-tab ' + (homeTab === 'me' ? 'active' : '') + '" onclick="setHomeTab(\'me\')">' + t('myOnly') + ' (' + myCount + ')</button>';
+  h += '<button class="seg-tab ' + (homeTab === 'all' ? 'active' : '') + '" onclick="setHomeTab(\'all\')">' + t('allT') + ' (' + allCount + ')</button>';
+  h += '<button class="seg-tab ' + (homeTab === 'roadmap' ? 'active' : '') + '" onclick="setHomeTab(\'roadmap\')">' + svgRoadmap + ' Roadmap Q1</button>';
+  h += '</div>';
 
-  if(homeView==='cards'){
-    // Roadmap & Milestone Summary Strip
+  if (homeTab === 'roadmap') {
+    // Clean Roadmap view
     const activeM = milestones['M-1'];
     const mProg = getMilestoneProgress('M-1');
-    h+='<div class="roadmap-strip" onclick="setHomeView(\'roadmap\')" title="'+(L==='es'?'Ver Roadmap completo':'View full Roadmap')+'">';
-    h+='<div style="display:flex;justify-content:space-between;align-items:center">';
-    h+='<div style="display:flex;align-items:center;gap:10px">';
-    h+='<div style="color:#a78bfa;display:flex;align-items:center">'+svgRoadmap+'</div>';
-    h+='<div>';
-    h+='<div style="font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px"><span>'+(activeM.title[L]||activeM.title.es||activeM.title.en)+'</span><span class="badge" style="background:rgba(16,185,129,.15);color:#10b981">'+(activeM.badge[L]||activeM.badge.es)+'</span></div>';
-    h+='<div style="font-size:11px;color:var(--vscode-descriptionForeground)">'+(L==='es'?'Hito objetivo: ':'Target milestone: ')+activeM.targetDate+' · '+activeM.quarter+' · 2 Epics</div>';
-    h+='</div>';
-    h+='</div>';
-    h+='<div style="text-align:right">';
-    h+='<span style="font-size:11px;font-weight:700;color:#10b981">'+mProg.pct+'% '+(L==='es'?'completado':'done')+'</span>';
-    h+='<div class="pbar" style="width:110px"><div class="pbar-fill" style="width:'+mProg.pct+'%"></div></div>';
-    h+='</div>';
-    h+='</div>';
-    h+='</div>';
 
-    // Create task button
-    h+='<div class="tr" style="border-style:dashed;cursor:pointer;justify-content:center;padding:10px" onclick="showScr(\'create\')"><div style="display:flex;align-items:center;gap:6px;color:var(--vscode-descriptionForeground)">'+svgPlus+'<span style="font-size:13px;font-weight:600">'+t('newTask')+'</span></div></div>';
+    h += '<div class="card card-bg" style="border-color:rgba(139,92,246,.3);margin-bottom:12px">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+    h += '<div style="display:flex;align-items:center;gap:6px">';
+    h += '<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981">' + activeM.quarter + '</span>';
+    h += '<strong style="font-size:13px">' + (activeM.title[L] || activeM.title.es || activeM.title.en) + '</strong>';
+    h += '</div>';
+    h += '<span style="font-size:12px;font-weight:700;color:#10b981">' + mProg.pct + '%</span>';
+    h += '</div>';
+    h += '<div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-bottom:8px">' + (activeM.desc[L] || activeM.desc.es || activeM.desc.en) + ' · ' + (L === 'es' ? 'Objetivo: ' : 'Target: ') + activeM.targetDate + '</div>';
+    h += '<div class="pbar"><div class="pbar-fill" style="width:' + mProg.pct + '%"></div></div>';
+    h += '</div>';
 
-    if(ids.length===0){
-      h+='<p style="text-align:center;color:var(--vscode-descriptionForeground);font-size:13px;padding:20px">'+t('noTasks')+'</p>';
-    }else{
-      const tL={story:'Story',bug:'Bug',spike:'Spike'};
-      ids.forEach(id=>{
-        const tk=tasks[id];
-        const title=tk.title[L]||tk.title.es||tk.title.en||tk.title;
-        const desc=tk.desc[L]||tk.desc.es||tk.desc.en||tk.desc;
-        const status=tk.status[L]||tk.status.es||tk.status.en||tk.status;
-        const isMine=tk.assignedTo==='me';
-        const epic=epics[tk.epicId];
-        const mstone=milestones[tk.milestoneId];
-        const testCount=tk.tests?tk.tests.length:3;
-        const ssCount=tk.screenshots?tk.screenshots.length:2;
+    // Epics inside Roadmap
+    Object.keys(epics).forEach(eid => {
+      const ep = epics[eid];
+      const epProg = getEpicProgress(eid);
+      const epTasks = allIds.filter(id => tasks[id].epicId === eid);
 
-        h+='<div class="tr" onclick="openTk(\''+id+'\')"><div style="flex:1">';
-        h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">';
-        h+='<span style="font-size:12px;font-family:monospace;font-weight:700;color:var(--vscode-textLink-foreground)">'+id+'</span>';
-        h+='<span class="badge" style="background:rgba(59,130,246,.12);color:#60a5fa">'+status+'</span>';
-        h+='<span class="badge" style="background:rgba(139,92,246,.08);color:#a78bfa;border:1px solid rgba(139,92,246,.15)">'+(tL[tk.type]||tk.type)+'</span>';
-        if(epic){
-          h+='<span class="badge" style="background:rgba(139,92,246,.12);color:#c084fc;border:1px solid rgba(139,92,246,.25)">'+epic.id+' · '+(epic.name[L]||epic.name.es||epic.name)+'</span>';
-        }
-        if(mstone){
-          h+='<span class="badge" style="background:rgba(59,130,246,.08);color:#93c5fd">'+mstone.quarter+'</span>';
-        }
-        if(isMine){
-          h+='<span class="badge" style="background:rgba(16,185,129,.1);color:#10b981">'+(L==='es'?'Para mi':'Assigned to me')+'</span>';
-        }
-        if(tk.figma)h+='<span style="font-size:10px;color:var(--vscode-descriptionForeground);display:flex;align-items:center;gap:2px">'+lg.Figma+'</span>';
-        h+='</div>';
-        h+='<div style="font-size:13px;font-weight:600">'+title+'</div>';
-        h+='<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:2px">'+((desc||'').substring(0,90))+'</div>';
-        h+='<div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11px;color:var(--vscode-descriptionForeground)">';
-        h+='<span style="color:#10b981;font-weight:600;display:inline-flex;align-items:center;gap:3px">'+svgCheck+testCount+' tests OK</span>';
-        h+='<span>·</span>';
-        h+='<span style="color:#38bdf8;font-weight:600;display:inline-flex;align-items:center;gap:3px">'+svgImage+ssCount+' '+(L==='es'?'capturas':'captures')+'</span>';
-        h+='</div>';
-        h+='</div>';
-        h+='<div style="display:flex;align-items:center;gap:4px"><button class="del-btn" onclick="event.stopPropagation();delTk(\''+id+'\')" title="'+t('delTask')+'">'+svgDel+'</button>'+svgChev+'</div></div>';
+      h += '<div style="margin-bottom:12px">';
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:0 2px">';
+      h += '<div style="display:flex;align-items:center;gap:6px">';
+      h += '<span style="width:8px;height:8px;border-radius:2px;background:' + ep.color + '"></span>';
+      h += '<span style="font-family:monospace;font-size:11px;font-weight:700">' + ep.id + '</span>';
+      h += '<strong style="font-size:12px">' + (ep.name[L] || ep.name.es || ep.name) + '</strong>';
+      h += '</div>';
+      h += '<span style="font-size:11px;color:#10b981;font-weight:600">' + epProg.done + '/' + epProg.total + ' (' + epProg.pct + '%)</span>';
+      h += '</div>';
+
+      epTasks.forEach(id => {
+        h += renderTaskCard(id);
+      });
+      h += '</div>';
+    });
+
+  } else {
+    // Card list view (Mis tareas o Todas)
+    // Horizontal Epic Filter Chips
+    h += '<div class="epic-chips">';
+    h += '<button class="epic-chip ' + (epicFilter === 'all' ? 'active' : '') + '" onclick="setEpicFilter(\'all\')">' + (L === 'es' ? 'Todas las Epics' : 'All Epics') + '</button>';
+    Object.keys(epics).forEach(eid => {
+      const ep = epics[eid];
+      const isSel = epicFilter === eid;
+      h += '<button class="epic-chip ' + (isSel ? 'active' : '') + '" onclick="setEpicFilter(\'' + eid + '\')">' + (ep.name[L] || ep.name.es || ep.name) + '</button>';
+    });
+    h += '</div>';
+
+    if (baseIds.length === 0) {
+      h += '<div style="text-align:center;padding:30px 10px;color:var(--vscode-descriptionForeground)">';
+      h += '<p style="font-size:13px;margin-bottom:8px">' + (L === 'es' ? 'No hay tareas para este filtro.' : 'No tasks match this filter.') + '</p>';
+      h += '<button class="bs" style="display:inline-flex;width:auto;padding:6px 12px;font-size:12px" onclick="setEpicFilter(\'all\')">' + (L === 'es' ? 'Mostrar todas' : 'Show all') + '</button>';
+      h += '</div>';
+    } else {
+      baseIds.forEach(id => {
+        h += renderTaskCard(id);
       });
     }
-  } else if(homeView==='epics'){
-    // Epics grouped view
-    Object.keys(epics).forEach(eid=>{
-      const ep=epics[eid];
-      const epProg=getEpicProgress(eid);
-      const mstone=milestones[ep.milestoneId];
-      const epTasks=ids.filter(id=>tasks[id].epicId===eid);
-
-      h+='<div class="epic-box">';
-      h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">';
-      h+='<div>';
-      h+='<div style="display:flex;align-items:center;gap:8px">';
-      h+='<span style="width:10px;height:10px;border-radius:2px;background:'+ep.color+';display:inline-block"></span>';
-      h+='<span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--vscode-textLink-foreground)">'+ep.id+'</span>';
-      h+='<strong style="font-size:14px">'+(ep.name[L]||ep.name.es||ep.name)+'</strong>';
-      if(mstone){
-        h+='<span class="badge" style="background:rgba(59,130,246,.12);color:#60a5fa">'+mstone.quarter+'</span>';
-      }
-      h+='</div>';
-      h+='<div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:3px">'+(ep.summary[L]||ep.summary.es||ep.summary)+' · <em>'+ep.lead+'</em></div>';
-      h+='</div>';
-      h+='<div style="text-align:right">';
-      h+='<span style="font-size:11px;font-weight:700;color:#10b981">'+epProg.done+'/'+epProg.total+' ('+epProg.pct+'%)</span>';
-      h+='<div class="pbar" style="width:90px"><div class="pbar-fill" style="width:'+epProg.pct+'%"></div></div>';
-      h+='</div>';
-      h+='</div>';
-
-      if(epTasks.length===0){
-        h+='<p style="font-size:12px;color:var(--vscode-descriptionForeground);padding:8px 0;margin:0">'+(L==='es'?'No hay tareas en este Epic para el filtro seleccionado.':'No tasks in this Epic for the active filter.')+'</p>';
-      } else {
-        epTasks.forEach(id=>{
-          const tk=tasks[id];
-          const title=tk.title[L]||tk.title.es||tk.title.en||tk.title;
-          const status=tk.status[L]||tk.status.es||tk.status.en||tk.status;
-          h+='<div class="tr" style="padding:10px;margin-bottom:6px" onclick="openTk(\''+id+'\')">';
-          h+='<div style="flex:1">';
-          h+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">';
-          h+='<span style="font-family:monospace;font-size:11px;font-weight:700;color:var(--vscode-textLink-foreground)">'+id+'</span>';
-          h+='<span class="badge" style="background:rgba(59,130,246,.12);color:#60a5fa">'+status+'</span>';
-          h+='<span style="font-size:12px;font-weight:600">'+title+'</span>';
-          h+='</div>';
-          h+='<div style="font-size:11px;color:var(--vscode-descriptionForeground);display:flex;gap:8px">';
-          h+='<span style="color:#10b981">'+svgCheck+(tk.tests?tk.tests.length:3)+' tests</span>';
-          h+='<span>·</span>';
-          h+='<span style="color:#38bdf8">'+svgImage+(tk.screenshots?tk.screenshots.length:2)+' '+(L==='es'?'capturas':'captures')+'</span>';
-          h+='</div>';
-          h+='</div>';
-          h+='<div style="display:flex;align-items:center;gap:4px">'+svgChev+'</div>';
-          h+='</div>';
-        });
-      }
-      h+='</div>';
-    });
-  } else if(homeView==='roadmap'){
-    // Milestones Roadmap view
-    h+='<div style="margin-bottom:14px">';
-    h+='<h2 style="font-size:15px;font-weight:700;margin-bottom:2px">'+t('roadMapTitle')+'</h2>';
-    h+='<p style="font-size:12px;color:var(--vscode-descriptionForeground)">'+(L==='es'?'Hitos estrategicos, entregables y progreso de Epics por trimestre.':'Strategic milestones, deliverables and Epic progress by quarter.')+'</p>';
-    h+='</div>';
-
-    ['M-1','M-2','M-0'].forEach(mid=>{
-      const m=milestones[mid];
-      const prog=getMilestoneProgress(mid);
-      const isAct=m.status==='in_progress';
-      const isUp=m.status==='upcoming';
-      const badgeBg=isAct?'rgba(16,185,129,.15)':isUp?'rgba(245,158,11,.15)':'rgba(59,130,246,.15)';
-      const badgeCol=isAct?'#10b981':isUp?'#f59e0b':'#60a5fa';
-
-      h+='<div class="card card-bg" style="margin-bottom:14px;border-color:'+(isAct?'rgba(139,92,246,.4)':'var(--vscode-panel-border)')+'">';
-      h+='<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">';
-      h+='<div>';
-      h+='<div style="display:flex;align-items:center;gap:8px">';
-      h+='<span class="badge" style="background:'+badgeBg+';color:'+badgeCol+';font-size:11px">'+m.quarter+'</span>';
-      h+='<strong style="font-size:14px">'+(m.title[L]||m.title.es||m.title.en)+'</strong>';
-      h+='<span class="badge" style="background:rgba(255,255,255,.06);color:var(--vscode-descriptionForeground)">'+(m.badge[L]||m.badge.es)+'</span>';
-      h+='</div>';
-      h+='<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:4px">'+(m.desc[L]||m.desc.es||m.desc)+'</div>';
-      h+='<div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:2px">'+(L==='es'?'Fecha objetivo: ':'Target date: ')+m.targetDate+'</div>';
-      h+='</div>';
-      h+='<div style="text-align:right">';
-      h+='<span style="font-size:12px;font-weight:700;color:'+badgeCol+'">'+prog.pct+'%</span>';
-      h+='<div class="pbar" style="width:100px"><div class="pbar-fill" style="width:'+prog.pct+'%;background:'+badgeCol+'"></div></div>';
-      h+='</div>';
-      h+='</div>';
-
-      if(m.epicIds && m.epicIds.length>0){
-        h+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--vscode-panel-border)">';
-        h+='<div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+(L==='es'?'Epics asociadas':'Associated Epics')+'</div>';
-        m.epicIds.forEach(eid=>{
-          const ep=epics[eid];
-          if(!ep)return;
-          const epProg=getEpicProgress(eid);
-          h+='<div style="background:var(--vscode-input-background);border:1px solid var(--vscode-panel-border);border-radius:6px;padding:8px 10px;margin-bottom:6px">';
-          h+='<div style="display:flex;justify-content:space-between;align-items:center">';
-          h+='<div style="display:flex;align-items:center;gap:6px">';
-          h+='<span style="width:8px;height:8px;border-radius:2px;background:'+ep.color+'"></span>';
-          h+='<span style="font-family:monospace;font-size:11px;font-weight:700">'+ep.id+'</span>';
-          h+='<span style="font-size:12px;font-weight:600">'+(ep.name[L]||ep.name.es||ep.name)+'</span>';
-          h+='</div>';
-          h+='<span style="font-size:11px;color:#10b981;font-weight:600">'+epProg.done+'/'+epProg.total+' '+t('tsk')+' ('+epProg.pct+'%)</span>';
-          h+='</div>';
-          h+='</div>';
-        });
-        h+='</div>';
-      }
-      h+='</div>';
-    });
   }
-  h+='</div>';
-  el.innerHTML=h;
+
+  h += '</div>';
+  el.innerHTML = h;
 }
 
 function delTk(id){vsc.postMessage({type:'confirmDelete',ticketId:id})}
