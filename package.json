@@ -1,0 +1,66 @@
+{
+  "name": "product-studio",
+  "displayName": "Product Studio",
+  "description": "Simplified IDE experience for Product Engineers: work on Jira tickets with AI, test, review and submit merge requests. No coding experience required.",
+  "version": "1.3.0",
+  "publisher": "product-engineering",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/product-engineering/product-studio-extension"
+  },
+  "homepage": "https://github.com/product-engineering/product-studio-extension#readme",
+  "bugs": {
+    "url": "https://github.com/product-engineering/product-studio-extension/issues"
+  },
+  "keywords": [
+    "product-engineer",
+    "vibecoding",
+    "jira",
+    "gitlab",
+    "github",
+    "figma",
+    "no-code",
+    "ai-coding",
+    "product-management"
+  ],
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "productStudio.open", "title": "Product Studio: Open" },
+      { "command": "productStudio.resetOnboarding", "title": "Product Studio: Reset Onboarding" },
+      { "command": "productStudio.createTask", "title": "Product Studio: Create Task" }
+    ],
+    "configuration": {
+      "title": "Product Studio",
+      "properties": {
+        "productStudio.language": {
+          "type": "string",
+          "enum": ["auto", "es", "en"],
+          "default": "auto",
+          "description": "Language for the Product Studio UI. 'auto' detects from VS Code."
+        },
+        "productStudio.jira.domain": {
+          "type": "string",
+          "default": "",
+          "description": "Jira Cloud domain (e.g. your-company.atlassian.net)"
+        },
+        "productStudio.git.provider": {
+          "type": "string",
+          "enum": ["gitlab", "github"],
+          "default": "gitlab"
+        },
+        "productStudio.git.repository": {
+          "type": "string",
+          "default": ""
+        }
+      }
+    }
+  }
+}
