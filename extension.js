@@ -119,7 +119,7 @@ function activate(context) {
     if (prompt) {
       try {
         await vscode.env.clipboard.writeText(prompt);
-      } catch (_) {}
+      } catch (_) { }
     }
 
     const ai = provider || getActiveAi();
@@ -180,16 +180,16 @@ function activate(context) {
         }
         opened = true;
         break;
-      } catch (_) {}
+      } catch (_) { }
     }
 
     const msg = lang === 'es'
       ? (opened
-          ? `Chat de ${ai} abierto y prompt copiado. Pega con Cmd+V / Ctrl+V.`
-          : `Prompt copiado. Abre el chat de ${ai} y pega con Cmd+V / Ctrl+V.`)
+        ? `Chat de ${ai} abierto y prompt copiado. Pega con Cmd+V / Ctrl+V.`
+        : `Prompt copiado. Abre el chat de ${ai} y pega con Cmd+V / Ctrl+V.`)
       : (opened
-          ? `${ai} chat opened & prompt copied. Paste with Cmd+V / Ctrl+V.`
-          : `Prompt copied. Open ${ai} chat and paste with Cmd+V / Ctrl+V.`);
+        ? `${ai} chat opened & prompt copied. Paste with Cmd+V / Ctrl+V.`
+        : `Prompt copied. Open ${ai} chat and paste with Cmd+V / Ctrl+V.`);
 
     vscode.window.showInformationMessage(msg);
   }
@@ -1057,7 +1057,7 @@ function cLang(l){
 }
 
 // ---- ONBOARDING ----
-let obS=1;
+let obS=0;
 let showTips=false;
 
 function toggleToolTips(){
@@ -1093,6 +1093,7 @@ function selectStarterStack(){
   selC.add(repoChoice);
   selC.add('Figma');
   activeAi = aiChoice;
+  obS = 1;
   rObS();
   toast(L === 'es' ? 'Stack basico seleccionado (IA + Jira + Repo + Figma)' : 'Starter stack selected (AI + Jira + Repo + Figma)');
 }
@@ -1103,33 +1104,53 @@ function rOb(){
 }
 function rObS(){
   const c=document.getElementById('obC');if(!c)return;
-  if(obS===1){
-    let h='<div style="text-align:center;font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px;font-weight:600">'+t('obS',{n:1,t:3})+'</div>';
-    h+='<h2 style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px">'+t('obT1')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);text-align:center;margin-bottom:12px">'+t('obS1')+'</p>';
+  if(obS===0){
+    let h='<div style="max-width:540px;margin:0 auto">';
+    h+='<div style="text-align:center;margin-bottom:20px">';
+    h+='<h1 style="font-size:18px;font-weight:700;margin-bottom:4px">Product Studio</h1>';
+    h+='<p style="font-size:12px;color:var(--vscode-descriptionForeground)">'+(L==='es'?'Elige como prefieres empezar a trabajar':'Choose how you want to get started')+'</p>';
+    h+='</div>';
 
-    // Beginner Tip Box
-    h+='<div class="card card-bg" style="border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.06);padding:10px 12px;margin-bottom:10px">';
-    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">';
-    h+='<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--vscode-focusBorder)">';
-    h+='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+    // 1. Where to start / Starter stack
+    h+='<div class="card card-bg" style="padding:14px;margin-bottom:14px;border-color:var(--vscode-panel-border)">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+    h+='<div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:var(--vscode-textLink-foreground)">';
+    h+='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
     h+='<span>'+(L==='es'?'No sabes por donde empezar?':'New here? Where to start')+'</span>';
     h+='</div>';
-    h+='<button class="bs" style="width:auto;padding:2px 8px;font-size:10px" onclick="selectStarterStack()">'+(L==='es'?'Elegir combinacion basica':'Pick starter stack')+'</button>';
+    h+='<button class="bp" style="width:auto;padding:5px 12px;font-size:11.5px" onclick="selectStarterStack()">'+(L==='es'?'Elegir combinacion basica':'Pick starter stack')+'</button>';
     h+='</div>';
-    h+='<p style="font-size:11px;color:var(--vscode-descriptionForeground);line-height:1.4">';
+    h+='<p style="font-size:12px;color:var(--vscode-descriptionForeground);line-height:1.45;margin-bottom:10px">';
     h+=(L==='es'
-      ?'Solo necesitas 3 cosas basicas: <strong>1 Asistente de IA</strong> (ej. Claude o Copilot para programar), <strong>1 Gestor de Tareas</strong> (Jira o Asana) y <strong>1 Repositorio</strong> (GitLab o GitHub). Haz clic en el boton de arriba para pre-seleccionarlas.'
+      ?'Solo necesitas 3 cosas basicas: <strong>1 Asistente de IA</strong> (Claude o Copilot para programar), <strong>1 Gestor de Tareas</strong> (Jira o Asana) y <strong>1 Repositorio</strong> (GitLab o GitHub). Haz clic en el boton para pre-seleccionarlas.'
       :'You only need 3 basics: <strong>1 AI Assistant</strong> (Claude or Copilot to write code), <strong>1 Task Manager</strong> (Jira or Asana), and <strong>1 Repository</strong> (GitLab or GitHub). Click the button above to pre-select them.');
-    h+='</p></div>';
+    h+='</p>';
+    h+='<div style="display:flex;justify-content:flex-end">';
+    h+='<button class="bs" style="width:auto;font-size:11px;padding:3px 8px" onclick="obN(1)">'+(L==='es'?'Personalizar herramientas manualmente ›':'Customize tools manually ›')+'</button>';
+    h+='</div>';
+    h+='</div>';
 
-    // Start Locally Banner
-    h+='<div class="card card-bg" style="padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-color:var(--vscode-panel-border)">';
-    h+='<div style="flex:1;min-width:0">';
-    h+='<div style="font-size:12px;font-weight:600;margin-bottom:2px">'+t('startLocally')+'</div>';
-    h+='<div style="font-size:11px;color:var(--vscode-descriptionForeground);line-height:1.3">'+t('startLocallyDesc')+'</div>';
+    // 2. Start locally
+    h+='<div class="card card-bg" style="padding:14px;margin-bottom:14px;border-color:var(--vscode-panel-border)">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+    h+='<div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:700">';
+    h+='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
+    h+='<span>'+(L==='es'?'Empezar en local':'Start locally')+'</span>';
     h+='</div>';
-    h+='<button class="bs" style="width:auto;padding:6px 12px;white-space:nowrap;font-size:11.5px;font-weight:600;color:var(--vscode-textLink-foreground);border-color:var(--vscode-focusBorder)" onclick="startLocally()">'+t('startLocallyBtn')+'</button>';
+    h+='<button class="bp" style="width:auto;padding:5px 12px;font-size:11.5px" onclick="startLocally()">'+(L==='es'?'Empezar en modo local':'Start in local mode')+'</button>';
     h+='</div>';
+    h+='<p style="font-size:12px;color:var(--vscode-descriptionForeground);line-height:1.45;margin-bottom:0">';
+    h+=(L==='es'
+      ?'Trabaja en tu maquina sin Jira ni herramientas externas. Crea epicas, historias y commits 100% locales en tu carpeta.'
+      :'Work on your machine without Jira or external tools. Create epics, stories, and commits 100% locally in your folder.');
+    h+='</p>';
+    h+='</div>';
+
+    h+='</div>';
+    c.innerHTML=h;
+  }else if(obS===1){
+    let h='<div style="text-align:center;font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px;font-weight:600">'+t('obS',{n:1,t:3})+'</div>';
+    h+='<h2 style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px">'+t('obT1')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);text-align:center;margin-bottom:12px">'+t('obS1')+'</p>';
 
     // Search bar & Explanation toggle
     h+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">';
@@ -1177,7 +1198,7 @@ function rObS(){
     });
     h+='</div>';
 
-    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px"><span style="font-size:11px;color:var(--vscode-descriptionForeground)" id="cCnt">'+t('obSel',{n:selC.size})+'</span><button class="bp" style="width:auto;padding:8px 20px" onclick="obN(2)">'+t('cont')+'</button></div>';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px"><button class="bs" style="width:auto;padding:6px 14px;font-size:12px" onclick="obN(0)">'+t('back')+'</button><div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:var(--vscode-descriptionForeground)" id="cCnt">'+t('obSel',{n:selC.size})+'</span><button class="bp" style="width:auto;padding:6px 18px;font-size:12px" onclick="obN(2)">'+t('cont')+'</button></div></div>';
     c.innerHTML=h;
   }else if(obS===2){
     let jDetMsg='';
@@ -1252,7 +1273,7 @@ function tC(el){
   if(cnt)cnt.innerText=t('obSel',{n:selC.size});
 }
 function startOb(){
-  obS=1;
+  obS=0;
   selC=new Set(cTools||[]);
   showScr('onboarding');
 }
@@ -2595,5 +2616,5 @@ if(onb){
 </script></body></html>`;
 }
 
-function deactivate() {}
+function deactivate() { }
 module.exports = { activate, deactivate };

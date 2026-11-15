@@ -2,6 +2,15 @@
 
 All notable changes to Product Studio are documented here.
 
+## [1.9.2] - 2026-11-15
+
+### Changed
+- **Clean Two-Path Onboarding Welcome Screen**:
+  - Initial view now presents two distinct, uncluttered choice cards before displaying any tool grid:
+    1. **New here? Where to start**: Guidance explaining the 3 basics with 1-click **Pick starter stack** and **Customize tools manually** navigation.
+    2. **Start locally**: Standalone local mode allowing developers to work on their machine without Jira or external tools in 1 click (**Start in local mode**).
+  - Tool selection grid moved to clean dedicated Step 1 without cluttered banners.
+
 ## [1.9.1] - 2026-11-15
 
 ### Added

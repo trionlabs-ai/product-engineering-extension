@@ -2,7 +2,7 @@
   "name": "product-studio",
   "displayName": "Product Studio",
   "description": "Simplified IDE experience for Product Engineers: work on Jira tickets with AI, test, review and submit merge requests.",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "publisher": "product-engineering",
   "license": "MIT",
   "icon": "media/icon.png",
