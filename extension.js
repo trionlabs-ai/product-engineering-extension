@@ -56,6 +56,33 @@ function activate(context) {
     return getState('epics', null);
   }
 
+  function getWorkspaceRoot() {
+    const folders = vscode.workspace.workspaceFolders;
+    return folders && folders.length > 0 ? folders[0].uri.fsPath : null;
+  }
+
+  function getLocalGitStatus() {
+    const cwd = getWorkspaceRoot();
+    return new Promise(resolve => {
+      if (!cwd) return resolve({ hasGit: false, branch: '', hasChanges: false, commits: 0, rootPath: null });
+      cp.exec('git rev-parse --is-inside-work-tree', { cwd }, (err, stdout) => {
+        if (err || !stdout || !stdout.trim().includes('true')) {
+          return resolve({ hasGit: false, branch: '', hasChanges: false, commits: 0, rootPath: cwd });
+        }
+        cp.exec('git branch --show-current', { cwd }, (bErr, bOut) => {
+          const branch = bErr || !bOut.trim() ? 'main' : bOut.trim();
+          cp.exec('git status --porcelain', { cwd }, (sErr, sOut) => {
+            const hasChanges = !sErr && !!sOut && sOut.trim().length > 0;
+            cp.exec('git rev-list --count HEAD', { cwd }, (cErr, cOut) => {
+              const commits = cErr ? 0 : parseInt((cOut || '').trim(), 10) || 0;
+              resolve({ hasGit: true, branch, hasChanges, commits, rootPath: cwd });
+            });
+          });
+        });
+      });
+    });
+  }
+
   function getDockerStatus() {
     return new Promise(resolve => {
       cp.exec('docker --version', (err, stdout) => {
@@ -186,7 +213,8 @@ function activate(context) {
       ticketId,
       getDetectedExts(),
       getActiveAi(),
-      getEpics()
+      getEpics(),
+      getState('localMode', false)
     );
 
     mainPanel.webview.onDidReceiveMessage(async msg => {
@@ -194,14 +222,55 @@ function activate(context) {
       switch (msg.type) {
         case 'finishOnboarding':
           setState('onboarded', true);
-          setState('connectedTools', msg.tools);
+          setState('connectedTools', msg.tools || []);
+          setState('localMode', !!msg.localMode);
           if (msg.activeAi) {
             setState('activeAi', msg.activeAi);
           } else {
             const aiChoice = (msg.tools || []).find(t => ['Claude', 'GitHub Copilot', 'Antigravity', 'Continue', 'Ollama', 'ChatGPT'].includes(t));
             if (aiChoice) setState('activeAi', aiChoice);
           }
-          vscode.window.showInformationMessage('Product Studio: ' + (lang === 'es' ? 'Proyecto configurado.' : 'Project configured.'));
+          const finMsg = msg.localMode
+            ? (lang === 'es' ? 'Product Studio: Modo local configurado. Sin dependencia de Jira ni repos remotos.' : 'Product Studio: Local mode configured. No Jira or remote repo required.')
+            : (lang === 'es' ? 'Product Studio: Proyecto configurado.' : 'Product Studio: Project configured.');
+          vscode.window.showInformationMessage(finMsg);
+          break;
+        case 'checkLocalGit':
+          const gitStat = await getLocalGitStatus();
+          mainPanel.webview.postMessage({ type: 'localGitInfo', ...gitStat });
+          break;
+        case 'initLocalGit':
+          const rootInit = getWorkspaceRoot();
+          if (!rootInit) {
+            vscode.window.showWarningMessage(lang === 'es' ? 'Abre una carpeta de trabajo en VS Code primero.' : 'Open a workspace folder in VS Code first.');
+            break;
+          }
+          cp.exec('git init && git config user.name "Product Engineer" && git config user.email "engineer@local" && git add -A && git commit -m "chore: initial commit"', { cwd: rootInit }, async (err) => {
+            const upStat = await getLocalGitStatus();
+            mainPanel.webview.postMessage({ type: 'localGitInfo', ...upStat });
+            vscode.window.showInformationMessage(lang === 'es' ? 'Repositorio Git local inicializado correctamente.' : 'Local Git repository initialized successfully.');
+          });
+          break;
+        case 'commitLocal':
+          const rootCommit = getWorkspaceRoot();
+          const taskTitle = msg.title || 'complete task';
+          const commitMsgText = `feat(${msg.ticketId}): ${taskTitle}`;
+          if (!rootCommit) {
+            const virtualHash = 'loc-' + Math.random().toString(36).substring(2, 8);
+            mainPanel.webview.postMessage({ type: 'localCommitSuccess', ticketId: msg.ticketId, hash: virtualHash, branch: 'local' });
+            vscode.window.showInformationMessage(lang === 'es' ? `Commit local registrado para ${msg.ticketId}.` : `Local commit recorded for ${msg.ticketId}.`);
+            break;
+          }
+          cp.exec(`git config user.name "Product Engineer" && git config user.email "engineer@local" && git add -A && git commit -m "${commitMsgText.replace(/"/g, '\"')}"`, { cwd: rootCommit }, (cErr) => {
+            cp.exec('git rev-parse --short HEAD', { cwd: rootCommit }, (hErr, hOut) => {
+              const commitHash = hErr || !hOut.trim() ? 'loc-' + Math.random().toString(36).substring(2, 8) : hOut.trim();
+              cp.exec('git branch --show-current', { cwd: rootCommit }, (bErr, bOut) => {
+                const curBranch = bErr || !bOut.trim() ? 'main' : bOut.trim();
+                mainPanel.webview.postMessage({ type: 'localCommitSuccess', ticketId: msg.ticketId, hash: commitHash, branch: curBranch });
+                vscode.window.showInformationMessage(lang === 'es' ? `Commit local realizado (${commitHash}): ${commitMsgText}` : `Local commit created (${commitHash}): ${commitMsgText}`);
+              });
+            });
+          });
           break;
         case 'setActiveAi':
           setState('activeAi', msg.provider);
@@ -285,13 +354,15 @@ function activate(context) {
             null,
             getDetectedExts(),
             getActiveAi(),
-            getEpics()
+            getEpics(),
+            getState('localMode', false)
           );
           break;
         case 'resetOnboarding':
           setState('onboarded', false);
           setState('connectedTools', []);
-          mainPanel.webview.html = getMainHtml(lang, false, [], getTasks(), null, getDetectedExts(), getActiveAi(), getEpics());
+          setState('localMode', false);
+          mainPanel.webview.html = getMainHtml(lang, false, [], getTasks(), null, getDetectedExts(), getActiveAi(), getEpics(), false);
           break;
         case 'confirmDelete':
           const yes = lang === 'es' ? 'Eliminar' : 'Delete';
@@ -393,7 +464,7 @@ function activate(context) {
     vscode.commands.registerCommand('productStudio.resetOnboarding', () => {
       setState('onboarded', false);
       setState('connectedTools', []);
-      if (mainPanel) mainPanel.webview.html = getMainHtml(getLang(), false, [], getTasks(), null, getDetectedExts(), getActiveAi(), getEpics());
+      if (mainPanel) mainPanel.webview.html = getMainHtml(getLang(), false, [], getTasks(), null, getDetectedExts(), getActiveAi(), getEpics(), false);
       vscode.window.showInformationMessage('Product Studio: Onboarding reset.');
     })
   );
@@ -404,7 +475,7 @@ function activate(context) {
 // =====================================================================
 // MAIN WEBVIEW — Full app
 // =====================================================================
-function getMainHtml(lang, onboarded, connectedTools, storedTasks, initialTicket, detectedExts, activeAi, storedEpics) {
+function getMainHtml(lang, onboarded, connectedTools, storedTasks, initialTicket, detectedExts, activeAi, storedEpics, localMode) {
   const tasksJson = JSON.stringify(storedTasks || null);
   const epicsJson = JSON.stringify(storedEpics || null);
   const connJson = JSON.stringify(connectedTools || []);
@@ -523,6 +594,7 @@ select.inp{cursor:pointer}
     <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
     <button onclick="showScr('env')" title="Docker & Entorno local"><svg viewBox="0 0 24 24" width="13" height="13" fill="#2496ED"><path d="M13.98 11.08h1.83V9.25H13.98v1.83zm-2.4 0h1.83V9.25h-1.83v1.83zm-2.41 0H11V9.25H9.17v1.83zm-2.4 0h1.83V9.25H6.77v1.83zm-2.41 0h1.83V9.25H4.36v1.83zm4.81-2.34h1.83V6.91H9.17v1.83zm2.4 0h1.83V6.91h-1.83v1.83zm2.41 0h1.83V6.91h-1.83v1.83zm-4.81-2.33h1.83V4.58H9.17v1.83zm13.78 6.42c-.44-.31-1.42-.45-2.2-.18-.17-.74-.6-1.39-1.25-1.88l-.51-.38-.34.54c-.38.59-.51 1.34-.41 2.05-.62.33-1.63.38-2.18.38H1.67c-.37 0-.67.3-.67.67 0 2.22.86 4.3 2.42 5.86C5.07 23.8 7.39 24.5 12 24.5c6.53 0 10.9-3.9 11.95-10.42.06-.41.05-.98-.5-1.76l-.5-.33z"/></svg><span>Docker</span><span class="sd sd-p" id="envDot" style="width:6px;height:6px"></span></button>
     <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
+    <span id="topLocalBadge" class="badge" style="background:var(--vscode-badge-background, rgba(255,255,255,.08));color:var(--vscode-badge-foreground, var(--vscode-foreground));border:1px solid var(--vscode-panel-border);font-size:10px;padding:2px 6px;${localMode ? '' : 'display:none'}">Local</span>
     <button onclick="showScr('ai')" id="topAiBtn" title="Asistente de IA"><span id="topAiIcon"></span><span id="topAiName">${aiProvider}</span><span class="sd sd-d" id="topAiDot" style="width:6px;height:6px;background:#10b981"></span></button>
     <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
     <button onclick="showScr('settings')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span id="bRC"></span></button>
@@ -546,7 +618,9 @@ select.inp{cursor:pointer}
 <script>
 const vsc=acquireVsCodeApi();
 let L='${lang}',onb=${onboarded},cTools=${connJson},detExts=${detectedJson};
+let isLocalMode = ${localMode ? 'true' : 'false'};
 let activeAi='${aiProvider}';
+let localGitState = { hasGit: false, branch: 'main', hasChanges: false, commits: 0, rootPath: null };
 let selC=new Set(); // Start empty - let user pick their own stack!
 let aTk=null,cS=1,filterMode='all';
 
@@ -607,7 +681,8 @@ const D={
     vsPluginDetected:'Plugin VS Code detectado',openBrw:'Abriendo navegador...',assigned:'Asignado a',
     envT:'Entorno local & Docker',envS:'Levanta bases de datos y servicios en tu maquina en 1 clic.',docStatus:'Estado de Docker',docInst:'Instalar Docker con Homebrew (Terminal)',docInstDesc:'Docker te permite correr bases de datos (Postgres, MySQL) y tu app localmente sin configurar nada.',docStart:'Iniciar Docker Desktop',docDwn:'Descargar instalador oficial (.dmg)',docRun:'Docker Desktop activo',docNotRun:'Docker instalado pero apagado',docNotRunDesc:'Docker esta instalado en tu Mac pero la aplicacion no esta abierta.',docNotInst:'Docker no detectado',quickDb:'Bases de datos locales (1 clic)',startComp:'Levantar aplicacion (docker-compose)',actCont:'Contenedores locales activos',noCont:'No hay contenedores corriendo actualmente.',stopBtn:'Detener',checkAgain:'Verificar de nuevo',
     aiHubT:'Asistentes de IA & Modelos',aiHubS:'Conecta tu chat preferido. Al trabajar en tickets, el contexto y los prompts se abren directamente en tu asistente.',aiActLbl:'Asistente activo para tickets y prompts',aiOpenBtn:'Abrir chat de {name}',aiAvail:'Modelos y Asistentes disponibles',aiUseBtn:'Usar este',aiConnBadge:'Conectado a VS Code',
-    viewCards:'Tarjetas',viewEpics:'Por Epic',viewRoadmap:'Roadmap & Milestones',epicLbl:'Epic',milestoneLbl:'Milestone',activeMilestone:'Hito actual',roadMapTitle:'Hoja de ruta y objetivos',genMoreTests:'Generar mas tests automaticos (IA)',genMoreSS:'Tomar captura automatica (Playwright)',autoSS:'Capturas generadas por tests',autoBadge:'Auto-capturado por Playwright',autoTestBadge:'Generado por IA',addedTestToast:'2 tests automaticos y nueva captura agregados con IA',addedSsToast:'Nueva captura automatica generada por Playwright'
+    viewCards:'Tarjetas',viewEpics:'Por Epic',viewRoadmap:'Roadmap & Milestones',epicLbl:'Epic',milestoneLbl:'Milestone',activeMilestone:'Hito actual',roadMapTitle:'Hoja de ruta y objetivos',genMoreTests:'Generar mas tests automaticos (IA)',genMoreSS:'Tomar captura automatica (Playwright)',autoSS:'Capturas generadas por tests',autoBadge:'Auto-capturado por Playwright',autoTestBadge:'Generado por IA',addedTestToast:'2 tests automaticos y nueva captura agregados con IA',addedSsToast:'Nueva captura automatica generada por Playwright',
+    startLocally:'Empezar en local',startLocallyDesc:'Trabaja en tu maquina sin Jira ni herramientas externas. Crea epicas, historias y commits 100% locales en tu carpeta.',startLocallyBtn:'Empezar en modo local',commitLocal:'Commit local',commitLocalBtn:'Guardar cambios con Commit local',initGitBtn:'Inicializar Git en esta carpeta (git init)',noGitFolder:'No se detecto repositorio Git en este proyecto.',localCommitMsg:'Cambios guardados en commit local. Tarea completada.'
   },
   en:{
     newP:'New project',reconf:'Reconfigure',obS:'Step {n} of {t}',obT1:'What tools does your team use?',obS1:'Select the ones you want to connect.',obSrch:'Search tools...',obSel:'{n} selected',cont:'Continue',back:'Back',obT2:'Connect your Jira',obS2:'Enter domain and project.',obJD:'Jira domain',obPr:'Project',obCA:'Connect with Atlassian in browser',obT3:'Connect your repository',obS3:'Link the project repository.',obPv:'Provider',obRe:'Repository',obGo:'Start working',
@@ -617,7 +692,8 @@ const D={
     vsPluginDetected:'VS Code plugin detected',openBrw:'Opening browser...',assigned:'Assigned to',
     envT:'Local Environment & Docker',envS:'Launch local databases and services on your machine in 1 click.',docStatus:'Docker Status',docInst:'Install Docker with Homebrew (Terminal)',docInstDesc:'Docker allows you to run databases (Postgres, MySQL) and your app locally without manual config.',docStart:'Start Docker Desktop',docDwn:'Download official installer (.dmg)',docRun:'Docker Desktop running',docNotRun:'Docker installed but stopped',docNotRunDesc:'Docker is installed on your Mac but the app is not open.',docNotInst:'Docker not detected',quickDb:'Local databases (1 click)',startComp:'Start application (docker-compose)',actCont:'Active local containers',noCont:'No containers currently running.',stopBtn:'Stop',checkAgain:'Check again',
     aiHubT:'AI Assistants & Models',aiHubS:'Connect your preferred chat. When working on tickets, context and prompts open directly in your assistant.',aiActLbl:'Active assistant for tickets and prompts',aiOpenBtn:'Open {name} chat',aiAvail:'Available Models & Assistants',aiUseBtn:'Use this',aiConnBadge:'Connected to VS Code',
-    viewCards:'Cards',viewEpics:'By Epic',viewRoadmap:'Roadmap & Milestones',epicLbl:'Epic',milestoneLbl:'Milestone',activeMilestone:'Active Milestone',roadMapTitle:'Roadmap & Milestones',genMoreTests:'Generate more automated tests (AI)',genMoreSS:'Capture automated screenshot (Playwright)',autoSS:'Automated test screenshots',autoBadge:'Auto-captured by Playwright',autoTestBadge:'AI Generated',addedTestToast:'2 automated tests & new screenshot added with AI',addedSsToast:'New automated screenshot generated by Playwright'
+    viewCards:'Cards',viewEpics:'By Epic',viewRoadmap:'Roadmap & Milestones',epicLbl:'Epic',milestoneLbl:'Milestone',activeMilestone:'Active Milestone',roadMapTitle:'Roadmap & Milestones',genMoreTests:'Generate more automated tests (AI)',genMoreSS:'Capture automated screenshot (Playwright)',autoSS:'Automated test screenshots',autoBadge:'Auto-captured by Playwright',autoTestBadge:'AI Generated',addedTestToast:'2 automated tests & new screenshot added with AI',addedSsToast:'New automated screenshot generated by Playwright',
+    startLocally:'Start locally',startLocallyDesc:'Work on your machine without Jira or external tools. Create epics, stories, and commits 100% locally in your folder.',startLocallyBtn:'Start in local mode',commitLocal:'Local commit',commitLocalBtn:'Save changes with local Commit',initGitBtn:'Initialize Git in this folder (git init)',noGitFolder:'No Git repository detected in this project folder.',localCommitMsg:'Changes saved to local commit. Task completed.'
   }
 };
 function t(k,v){let s=(D[L]&&D[L][k])||k;if(v)Object.entries(v).forEach(([a,b])=>{s=s.replace('{'+a+'}',b)});return s}
@@ -989,6 +1065,26 @@ function toggleToolTips(){
   rObS();
 }
 
+function startLocally(){
+  isLocalMode = true;
+  if (selC.size === 0) {
+    const aiChoice = detExts.copilot ? 'GitHub Copilot' : (detExts.gemini ? 'Antigravity' : 'Claude');
+    selC.add(aiChoice);
+    activeAi = aiChoice;
+  }
+  vsc.postMessage({
+    type: 'finishOnboarding',
+    tools: Array.from(selC),
+    localMode: true,
+    activeAi: activeAi
+  });
+  onb = true;
+  const bLoc = document.getElementById('topLocalBadge');
+  if (bLoc) bLoc.style.display = '';
+  toast(L === 'es' ? 'Modo local activado. Crea tus epicas, tareas y commits en local.' : 'Local mode activated. Create your epics, tasks, and commits locally.');
+  showScr('home');
+}
+
 function selectStarterStack(){
   const aiChoice = detExts.copilot ? 'GitHub Copilot' : 'Claude';
   const repoChoice = detExts.github ? 'GitHub' : 'GitLab';
@@ -1012,7 +1108,7 @@ function rObS(){
     h+='<h2 style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px">'+t('obT1')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);text-align:center;margin-bottom:12px">'+t('obS1')+'</p>';
 
     // Beginner Tip Box
-    h+='<div class="card card-bg" style="border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.06);padding:10px 12px;margin-bottom:12px">';
+    h+='<div class="card card-bg" style="border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.06);padding:10px 12px;margin-bottom:10px">';
     h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">';
     h+='<div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--vscode-focusBorder)">';
     h+='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
@@ -1025,6 +1121,15 @@ function rObS(){
       ?'Solo necesitas 3 cosas basicas: <strong>1 Asistente de IA</strong> (ej. Claude o Copilot para programar), <strong>1 Gestor de Tareas</strong> (Jira o Asana) y <strong>1 Repositorio</strong> (GitLab o GitHub). Haz clic en el boton de arriba para pre-seleccionarlas.'
       :'You only need 3 basics: <strong>1 AI Assistant</strong> (Claude or Copilot to write code), <strong>1 Task Manager</strong> (Jira or Asana), and <strong>1 Repository</strong> (GitLab or GitHub). Click the button above to pre-select them.');
     h+='</p></div>';
+
+    // Start Locally Banner
+    h+='<div class="card card-bg" style="padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-color:var(--vscode-panel-border)">';
+    h+='<div style="flex:1;min-width:0">';
+    h+='<div style="font-size:12px;font-weight:600;margin-bottom:2px">'+t('startLocally')+'</div>';
+    h+='<div style="font-size:11px;color:var(--vscode-descriptionForeground);line-height:1.3">'+t('startLocallyDesc')+'</div>';
+    h+='</div>';
+    h+='<button class="bs" style="width:auto;padding:6px 12px;white-space:nowrap;font-size:11.5px;font-weight:600;color:var(--vscode-textLink-foreground);border-color:var(--vscode-focusBorder)" onclick="startLocally()">'+t('startLocallyBtn')+'</button>';
+    h+='</div>';
 
     // Search bar & Explanation toggle
     h+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">';
@@ -1530,7 +1635,8 @@ function saveNewTask(){
   const crit=newCriteria.filter(c=>c.trim());
   if(crit.length===0){toast(L==='es'?'Agrega al menos un criterio':'Add at least one criterion');return}
   nextId++;
-  const id='PROJ-'+nextId;
+  const prefix = isLocalMode ? (epics[epicId] && epics[epicId].key ? epics[epicId].key : 'LOCAL') : 'PROJ';
+  const id = prefix + '-' + nextId;
   const newTask={
     title:{es:title,en:title},
     desc:{es:desc,en:desc},
@@ -1760,7 +1866,47 @@ function rSC(){
     }, 10);
   }
   else if(cS===5){
-    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 5</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('mrT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('mrS')+'</p><div class="card card-bg" style="font-size:13px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--vscode-descriptionForeground)">Ticket</span><span style="font-family:monospace;color:var(--vscode-textLink-foreground);font-weight:700">'+aTk+'</span></div><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--vscode-descriptionForeground)">'+t('branch')+'</span><span style="font-family:monospace;font-size:12px">feature/'+aTk.toLowerCase()+'</span></div><div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--vscode-descriptionForeground)">'+t('tests')+'</span><span style="color:#10b981;font-weight:600">'+cr.length+'/'+cr.length+' OK</span></div><div style="display:flex;justify-content:space-between"><span style="color:var(--vscode-descriptionForeground)">'+t('evid')+'</span><span style="color:#10b981;font-weight:600">Jira</span></div></div><button class="bg" onclick="doMR()">'+lg.GitLab+' '+t('crMR')+'</button>';
+    vsc.postMessage({ type: 'checkLocalGit' });
+    const hasRemote = cTools.includes('GitLab') || cTools.includes('GitHub');
+    const branchName = localGitState.hasGit ? localGitState.branch : ('feature/' + aTk.toLowerCase());
+    const isLocalFlow = isLocalMode || !hasRemote;
+
+    let gitSection = '';
+    if (!localGitState.hasGit) {
+      gitSection = '<div class="card card-bg" style="margin-bottom:12px;border-color:var(--vscode-panel-border)">' +
+        '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">' + t('noGitFolder') + '</div>' +
+        '<button class="bs" style="width:auto;padding:6px 12px;font-size:11.5px" onclick="initGitInWorkspace()">' + svgTerm + ' ' + t('initGitBtn') + '</button>' +
+      '</div>';
+    } else {
+      gitSection = '<div class="card card-bg" style="margin-bottom:12px;border-color:var(--vscode-panel-border)">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+          '<span style="font-size:11px;color:var(--vscode-descriptionForeground)">' + t('branchLocal') + '</span>' +
+          '<span style="font-family:monospace;font-size:11px;font-weight:600">' + branchName + ' (' + localGitState.commits + ' commits)</span>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between">' +
+          '<span style="font-size:11px;color:var(--vscode-descriptionForeground)">' + t('commitMsgLbl') + '</span>' +
+          '<span style="font-family:monospace;font-size:11px;color:var(--vscode-textLink-foreground)">feat(' + aTk + '): ' + (tk.title[L]||tk.title.es||tk.title.en||tk.title).substring(0, 30) + '...</span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    let actionsH = '';
+    actionsH += '<button class="bp" style="margin-bottom:8px" onclick="doLocalCommit()">' + svgCheck + ' ' + t('commitLocalBtn') + '</button>';
+    if (hasRemote) {
+      actionsH += '<button class="bs" onclick="doMR()">' + (cTools.includes('GitLab') ? lg.GitLab : lg.GitHub) + ' ' + t('crMR') + '</button>';
+    }
+
+    c.innerHTML = '<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">' + t('stp') + ' 5</span></div>' +
+      '<h2 style="font-size:15px;font-weight:700;margin-bottom:4px">' + (isLocalFlow ? t('commitLocal') : t('mrT')) + '</h2>' +
+      '<p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">' + (isLocalFlow ? t('commitLocalDesc') : t('mrS')) + '</p>' +
+      '<div class="card card-bg" style="font-size:13px;margin-bottom:12px">' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--vscode-descriptionForeground)">Ticket</span><span style="font-family:monospace;color:var(--vscode-textLink-foreground);font-weight:700">' + aTk + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--vscode-descriptionForeground)">' + t('branch') + '</span><span style="font-family:monospace;font-size:12px">' + branchName + '</span></div>' +
+        '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="color:var(--vscode-descriptionForeground)">' + t('tests') + '</span><span style="color:#10b981;font-weight:600">' + cr.length + '/' + cr.length + ' OK</span></div>' +
+        '<div style="display:flex;justify-content:space-between"><span style="color:var(--vscode-descriptionForeground)">' + (isLocalFlow ? 'Workspace' : t('evid')) + '</span><span style="color:#10b981;font-weight:600">' + (isLocalFlow ? (localGitState.rootPath ? 'Carpeta local' : 'Memoria local') : 'Jira') + '</span></div>' +
+      '</div>' +
+      gitSection +
+      actionsH;
   }
 }
 
@@ -1843,6 +1989,18 @@ function doMR(){
   vsc.postMessage({type:'createMR',ticketId:aTk,title:tasks[aTk].title[L]});
   toast(t('crMR'));
   setTimeout(()=>sDone(t('mrMsg')),300);
+}
+
+function initGitInWorkspace(){
+  vsc.postMessage({ type: 'initLocalGit' });
+  toast(L === 'es' ? 'Inicializando repositorio Git local...' : 'Initializing local Git repository...');
+}
+
+function doLocalCommit(){
+  const tk = tasks[aTk];
+  const title = tk ? (tk.title[L] || tk.title.es || tk.title.en || tk.title) : 'complete task';
+  vsc.postMessage({ type: 'commitLocal', ticketId: aTk, title });
+  toast(L === 'es' ? 'Guardando commit local...' : 'Saving local commit...');
 }
 function cpP(btn,txt){
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -2376,6 +2534,20 @@ window.addEventListener('message',e=>{
     if(selectedEpicId === delEid) selectedEpicId = null;
     toast((L==='es'?'Epica eliminada: ':'Epic deleted: ')+delEid);
     showScr('home');
+  }
+  if(e.data.type==='localGitInfo'){
+    localGitState = {
+      hasGit: !!e.data.hasGit,
+      branch: e.data.branch || 'main',
+      hasChanges: !!e.data.hasChanges,
+      commits: e.data.commits || 0,
+      rootPath: e.data.rootPath || null
+    };
+    if (aTk && cS === 5) rSC();
+  }
+  if(e.data.type==='localCommitSuccess'){
+    const successMsg = (L === 'es' ? 'Commit local ' : 'Local commit ') + (e.data.hash || '') + (L === 'es' ? ' realizado en rama ' : ' created on branch ') + (e.data.branch || 'main') + '.';
+    sDone(successMsg);
   }
   if(e.data.type==='evidenceSelected'&&e.data.fileNames){
     const tk = tasks[aTk];

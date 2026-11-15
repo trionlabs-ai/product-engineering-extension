@@ -8,9 +8,11 @@ Product Studio turns VS Code into an accessible development studio: pick a Jira 
 
 ## Features
 
+- **Local & Offline Mode (No Jira/External Tool Required)** — start locally with 1 click; create Epics, stories, and manage commits directly on your machine without needing Jira or a remote Git repository.
 - **Epics & Tasks Drill-Down Navigation** — 2-level flow: browse project Epics with live completion progress, click into any Epic to view its tasks, and jump directly into the step-by-step ticket workspace.
 - **Full Epics CRUD** — create, view, edit, and delete Epics with native confirmation modals; automatically unassigns tasks safely without data loss.
 - **Task Completion Workflow & Direct Toggle** — mark tasks as completed in 1 click directly from the list or complete them automatically upon submitting merge requests.
+- **Local Git Commits & Repository Init** — Step 5 automatically detects local Git, allows 1-click initialization (`git init`), and creates formatted commits (`feat(TASK): title`).
 - **Guided Onboarding with Beginner Tips** — friendly "¿No sabes por dónde empezar?" tips, 1-click Starter Stack recommendation, and plain-language tool explanations.
 - **AI Assistant Hub & Topbar Indicator** — live status indicator on top for your connected AI (Claude, GitHub Copilot, Antigravity, Continue, Ollama, ChatGPT) with 1-click chat invocation.
 - **Docker & Local Environment Manager** — launch local databases (PostgreSQL, MySQL, Redis, docker-compose) with 1 click; automated Docker detection & 1-click Homebrew installer.

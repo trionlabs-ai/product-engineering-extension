@@ -2,6 +2,17 @@
 
 All notable changes to Product Studio are documented here.
 
+## [1.9.1] - 2026-11-15
+
+### Added
+- **Full Offline & Local-Only Workflow**:
+  - **Start Locally Onboarding Button**: 1-click "Empezar en local" button in onboarding to work standalone without requiring Jira, GitLab, GitHub, or external credentials.
+  - **Local Epics & Stories**: Full CRUD capability for Epics and Tasks stored locally in global state with dynamic prefix (`LOCAL-` / `KEY-`).
+  - **Local Git Commit Step**: Step 5 now detects local Git repository state (current branch, commit history count).
+  - **1-Click Local Git Initialization**: If no Git repo is found in workspace, developers can initialize Git (`git init`) directly from the UI.
+  - **Direct Local Commit Action**: Save task changes locally with formatted commit messages (`feat(TASK): title`) without forcing a remote Merge Request.
+  - **Updated Animated Demo GIF**: Refreshed `media/demo.gif` in README demonstrating the local onboarding and commit workflow.
+
 ## [1.9.0] - 2026-11-14
 
 ### Added
