@@ -2,6 +2,12 @@
 
 All notable changes to Product Studio are documented here.
 
+## [1.9.5] - 2026-11-15
+
+### Added
+- **Bilingual Demo Visuals (English & Spanish)**: Generated localized flow animations for both English (`media/demo.gif`) and Spanish (`media/demo-es.gif`) with English and Spanish demo datasets.
+- **English Flow Demo in README**: README and extension description pages now showcase the English demo animation by default with a direct link to the Spanish version.
+
 ## [1.9.4] - 2026-11-15
 
 ### Changed

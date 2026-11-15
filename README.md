@@ -4,7 +4,9 @@ A simplified, guided workspace for Product Engineers, PMs, designers, QA, and an
 
 Product Studio turns VS Code into an accessible development studio: pick a Jira ticket, work with your connected AI assistant (Claude, GitHub Copilot, Antigravity, Ollama, Continue), test changes, launch local databases in 1 click via Docker, add rich evidence, and submit merge requests — without needing deep software engineering knowledge.
 
-![Product Studio Flow](https://raw.githubusercontent.com/fersiguenza/product-engineering-extension/main/media/demo.gif)
+![Product Studio Flow (English)](https://raw.githubusercontent.com/fersiguenza/product-engineering-extension/main/media/demo.gif)
+
+*Available in English and Spanish: [Ver demostración en español](https://raw.githubusercontent.com/fersiguenza/product-engineering-extension/main/media/demo-es.gif)*
 
 ## Features
 
