@@ -733,71 +733,11 @@ const tDet={
   Figma:'figma.com',OpenSpec:'openspec.io',GCP:'cloud.google.com'
 };
 
-// Epics & Milestones
-const defaultEpics = {
-  'EPIC-10': {
-    id: 'EPIC-10',
-    key: 'PAYMENTS',
-    name: { es: 'Pasarela de Pagos Latam', en: 'Latam Payment Gateway' },
-    color: '#8b5cf6',
-    milestoneId: 'M-1',
-    lead: 'Alex R. (Product Lead)',
-    summary: { es: 'Soporte de pagos en moneda local con integración de webhooks y reintentos.', en: 'Local currency payment support with webhook integration and retries.' }
-  },
-  'EPIC-12': {
-    id: 'EPIC-12',
-    key: 'BILLING-UI',
-    name: { es: 'Portal de Facturación y Filtros', en: 'Billing & Invoice Portal' },
-    color: '#3b82f6',
-    milestoneId: 'M-1',
-    lead: 'Sofia M. (Design & PM)',
-    summary: { es: 'Gestión ágil de facturas, filtros avanzados por fecha y conciliación.', en: 'Agile invoice management, advanced date filters, and reconciliation.' }
-  },
-  'EPIC-15': {
-    id: 'EPIC-15',
-    key: 'PERF-INFRA',
-    name: { es: 'Rendimiento y Optimización de Base de Datos', en: 'Database Performance & Optimization' },
-    color: '#f59e0b',
-    milestoneId: 'M-2',
-    lead: 'Carlos D. (Tech Lead)',
-    summary: { es: 'Reducción de latencia en consultas masivas y tiempo de carga < 1s.', en: 'Latency reduction on bulk queries and load time under 1s.' }
-  }
-};
+// Epics & Milestones (empty by default - no demo data)
+const defaultEpics = {};
+const defaultMilestones = {};
 
-const defaultMilestones = {
-  'M-1': {
-    id: 'M-1',
-    title: { es: 'Q1 Launch: Checkout & Billing v2.0', en: 'Q1 Launch: Checkout & Billing v2.0' },
-    quarter: 'Q1 2026',
-    targetDate: '31 Mar 2026',
-    status: 'in_progress',
-    badge: { es: 'En curso', en: 'In progress' },
-    desc: { es: 'Lanzamiento de pagos locales Latam y nuevo portal de facturación.', en: 'Latam local payments rollout and new billing admin portal.' },
-    epicIds: ['EPIC-10', 'EPIC-12']
-  },
-  'M-2': {
-    id: 'M-2',
-    title: { es: 'Q2 Milestone: Enterprise Scale & Performance', en: 'Q2 Milestone: Enterprise Scale & Performance' },
-    quarter: 'Q2 2026',
-    targetDate: '30 Jun 2026',
-    status: 'upcoming',
-    badge: { es: 'Próximo', en: 'Upcoming' },
-    desc: { es: 'Infraestructura resiliente para más de 100k transacciones diarias.', en: 'Resilient infrastructure for 100k+ daily transactions.' },
-    epicIds: ['EPIC-15']
-  },
-  'M-0': {
-    id: 'M-0',
-    title: { es: 'Q4 Foundation: Core Auth & Specs', en: 'Q4 Foundation: Core Auth & Specs' },
-    quarter: 'Q4 2025',
-    targetDate: '15 Dic 2025',
-    status: 'completed',
-    badge: { es: 'Completado', en: 'Completed' },
-    desc: { es: 'Bases de autenticación y especificaciones iniciales del producto.', en: 'Authentication foundation and initial product specifications.' },
-    epicIds: []
-  }
-};
-
-let epics = ${epicsJson} || JSON.parse(JSON.stringify(defaultEpics));
+let epics = (${epicsJson} && Object.keys(${epicsJson}).length > 0) ? ${epicsJson} : {};
 let milestones = defaultMilestones;
 let selectedEpicId = null; // null = list of epics; string = tasks in that epic
 let editingEpicId = null; // null = new epic, string = editing existing epic
@@ -924,88 +864,10 @@ function getMilestoneProgress(milestoneId) {
   return { total: mTasks.length, done, pct, tasks: mTasks };
 }
 
-// Tasks (mutable)
-let nextId=200;
-const defaultTasks={
-  'PROJ-104':{
-    title:{es:'Filtro por fecha en facturas',en:'Invoice date filter'},
-    desc:{es:'Como admin, quiero filtrar facturas por fecha para conciliar pagos sin revisar 500 registros.',en:'As an admin, I want to filter invoices by date to reconcile payments without reviewing 500 records.'},
-    status:{es:'En curso',en:'In progress'},color:'blue',type:'story',figma:true,assignedTo:'me',
-    epicId:'EPIC-12',milestoneId:'M-1',
-    criteria:{es:['Selector desplegable visible','Opciones: 7 dias / Todas','Filtrado instantaneo'],en:['Visible dropdown selector','Options: 7 days / All','Instant filtering']},
-    tests:[
-      {id:'t1',name:'test_date_dropdown_rendered',desc:{es:'Selector desplegable visible en DOM',en:'Dropdown selector visible in DOM'},status:'passed',duration:'32ms'},
-      {id:'t2',name:'test_filter_range_7days_query',desc:{es:'Filtro 7 dias devuelve unicamente registros del rango',en:'7-day filter returns only records in range'},status:'passed',duration:'54ms'},
-      {id:'t3',name:'test_instant_filtering_debounce',desc:{es:'Filtrado reactivo instantaneo sin refrescar pagina',en:'Instant reactive filtering without page refresh'},status:'passed',duration:'41ms'}
-    ],
-    screenshots:[
-      {id:'ss-104-1',name:'evidence_invoices_table_default.png',title:{es:'Vista inicial de facturas sin filtro',en:'Initial invoices table without filter'},source:'Playwright E2E Runner',time:'10:42:15'},
-      {id:'ss-104-2',name:'evidence_date_picker_dropdown_open.png',title:{es:'Selector desplegable de fechas abierto',en:'Date picker dropdown open'},source:'Playwright E2E Runner',time:'10:42:18'},
-      {id:'ss-104-3',name:'evidence_filtered_invoices_7days.png',title:{es:'Tabla con filtro 7 dias aplicado (42ms)',en:'Table with 7-day filter applied (42ms)'},source:'Playwright E2E Runner',time:'10:42:21'}
-    ]
-  },
-  'PROJ-105':{
-    title:{es:'Investigar pasarela de pago Latam',en:'Investigate Latam payment gateway'},
-    desc:{es:'Comparar pasarelas que soporten tarjetas locales en Argentina, Colombia y Mexico.',en:'Compare gateways supporting local cards in Argentina, Colombia and Mexico.'},
-    status:{es:'En curso',en:'In progress'},color:'purple',type:'spike',assignedTo:'me',
-    epicId:'EPIC-10',milestoneId:'M-1',
-    criteria:{es:['Comparar 3+ pasarelas','Costos por transaccion','Documentar en Confluence'],en:['Compare 3+ gateways','Per-transaction costs','Document in Confluence']},
-    tests:[
-      {id:'t1',name:'test_gateway_api_handshake',desc:{es:'Conexion HTTPS y auth con sandbox de pagos',en:'HTTPS handshake and auth with payment sandbox'},status:'passed',duration:'120ms'},
-      {id:'t2',name:'test_local_currency_conversion',desc:{es:'Calculo de conversion de divisas ARS/COP/MXN a USD',en:'Currency conversion calculation ARS/COP/MXN to USD'},status:'passed',duration:'48ms'},
-      {id:'t3',name:'test_webhook_retry_simulation',desc:{es:'Simulacion de reintentos exponenciales ante error 500',en:'Exponential retry simulation on 500 error'},status:'passed',duration:'65ms'}
-    ],
-    screenshots:[
-      {id:'ss-105-1',name:'evidence_gateway_comparison_matrix.png',title:{es:'Matriz comparativa de costos y comisiones',en:'Cost and fee comparison matrix'},source:'Playwright E2E Runner',time:'11:15:02'},
-      {id:'ss-105-2',name:'evidence_webhook_latency_benchmark.png',title:{es:'Benchmark de latencia de webhooks',en:'Webhook latency benchmark'},source:'Playwright E2E Runner',time:'11:15:06'}
-    ]
-  },
-  'PROJ-102':{
-    title:{es:'Validar longitud CVC',en:'Validate CVC length'},
-    desc:{es:'Prevenir cobros rechazados cuando AmEx necesita 4 digitos.',en:'Prevent rejected charges when AmEx needs 4-digit CVC.'},
-    status:{es:'Para revisar',en:'For review'},color:'amber',type:'bug',assignedTo:'me',
-    epicId:'EPIC-10',milestoneId:'M-1',
-    criteria:{es:['CVC valida 3 digitos','AmEx acepta 4','Error claro'],en:['CVC validates 3 digits','AmEx accepts 4','Clear error']},
-    tests:[
-      {id:'t1',name:'test_visa_mastercard_cvc_3digits',desc:{es:'Acepta 3 digitos para Visa y Mastercard',en:'Accepts 3 digits for Visa and Mastercard'},status:'passed',duration:'28ms'},
-      {id:'t2',name:'test_amex_cvc_4digits_validation',desc:{es:'Acepta 4 digitos para tarjetas American Express',en:'Accepts 4 digits for American Express cards'},status:'passed',duration:'31ms'},
-      {id:'t3',name:'test_invalid_cvc_error_tooltip',desc:{es:'Muestra mensaje accesible ante longitud invalida',en:'Displays accessible tooltip on invalid length'},status:'passed',duration:'35ms'}
-    ],
-    screenshots:[
-      {id:'ss-102-1',name:'evidence_amex_4digit_cvc_valid.png',title:{es:'Validacion AmEx con 4 digitos aprobada',en:'AmEx 4-digit validation approved'},source:'Playwright E2E Runner',time:'09:20:10'},
-      {id:'ss-102-2',name:'evidence_cvc_error_feedback.png',title:{es:'Feedback visual ante CVC invalido',en:'Visual feedback on invalid CVC'},source:'Playwright E2E Runner',time:'09:20:14'}
-    ]
-  },
-  'PROJ-108':{
-    title:{es:'Notificacion por email al fallar pago recurrente',en:'Email notification on recurring payment failure'},
-    desc:{es:'Enviar recordatorio automatico al usuario con link directo a actualizar tarjeta.',en:'Send automatic reminder to user with direct link to update card.'},
-    status:{es:'Backlog',en:'Backlog'},color:'blue',type:'story',assignedTo:'team',
-    epicId:'EPIC-10',milestoneId:'M-1',
-    criteria:{es:['Plantilla de email en SendGrid','Webhook de reintento fallido','Test de envio'],en:['Email template in SendGrid','Failed retry webhook','Delivery test']},
-    tests:[
-      {id:'t1',name:'test_sendgrid_template_compiled',desc:{es:'Plantilla HTML compila variables de usuario y enlace seguro',en:'HTML template compiles user vars and secure link'},status:'passed',duration:'50ms'},
-      {id:'t2',name:'test_payment_failed_webhook_trigger',desc:{es:'Webhook captura evento charge.failed y encola email',en:'Webhook captures charge.failed and queues email'},status:'passed',duration:'62ms'}
-    ],
-    screenshots:[
-      {id:'ss-108-1',name:'evidence_email_template_preview.png',title:{es:'Previsualizacion de correo de notificacion',en:'Email notification template preview'},source:'Playwright E2E Runner',time:'14:05:00'}
-    ]
-  },
-  'PROJ-110':{
-    title:{es:'Optimizacion de queries en reporte mensual',en:'Monthly report query optimization'},
-    desc:{es:'El reporte tarda 14s en cargar para cuentas con mas de 10k transacciones.',en:'Report takes 14s to load for accounts with over 10k transactions.'},
-    status:{es:'Backlog',en:'Backlog'},color:'amber',type:'bug',assignedTo:'team',
-    epicId:'EPIC-15',milestoneId:'M-2',
-    criteria:{es:['Agregar indices en created_at y account_id','Bajar tiempo a <1s'],en:['Add indexes on created_at and account_id','Reduce time to <1s']},
-    tests:[
-      {id:'t1',name:'test_query_execution_plan_index_scan',desc:{es:'Plan de ejecucion usa index scan en vez de seq scan',en:'Query plan uses index scan instead of seq scan'},status:'passed',duration:'82ms'},
-      {id:'t2',name:'test_report_load_time_under_1s',desc:{es:'Respuesta con 20k registros responde en <650ms',en:'Response with 20k records returns in <650ms'},status:'passed',duration:'640ms'}
-    ],
-    screenshots:[
-      {id:'ss-110-1',name:'evidence_pg_explain_analyze_index.png',title:{es:'EXPLAIN ANALYZE con indice en created_at',en:'EXPLAIN ANALYZE with index on created_at'},source:'Playwright E2E Runner',time:'16:30:10'}
-    ]
-  }
-};
-let tasks = ${tasksJson} || JSON.parse(JSON.stringify(defaultTasks));
+// Tasks (mutable, empty by default - no demo data)
+let nextId = 100;
+const defaultTasks = {};
+let tasks = (${tasksJson} && Object.keys(${tasksJson}).length > 0) ? ${tasksJson} : {};
 
 function saveTasks(){vsc.postMessage({type:'saveTasks',tasks})}
 
@@ -1382,58 +1244,85 @@ function rHome(){
   let h = '<div class="ctr fi">';
 
   if (selectedEpicId === null) {
-    // LEVEL 1: Listado de Epicas
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px">';
-    h += '<div>';
-    h += '<h1 style="font-size:18px;font-weight:700">' + (L === 'es' ? 'Epicas del Proyecto' : 'Project Epics') + '</h1>';
-    h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:2px">' + (L === 'es' ? 'Selecciona una epica para ver sus tareas' : 'Select an epic to view its tasks') + '</div>';
-    h += '</div>';
-    h += '<div style="display:flex;align-items:center;gap:6px">';
-    h += '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="openCreateEpic()">' + svgPlus + ' ' + (L === 'es' ? 'Nueva Epica' : 'New Epic') + '</button>';
-    h += '<button class="bp" style="width:auto;padding:6px 14px;font-size:12px" onclick="showScr(\'create\')">' + svgPlus + ' ' + t('newTask') + '</button>';
-    h += '</div>';
-    h += '</div>';
-
     const epicKeys = Object.keys(epics);
-    if (epicKeys.length === 0) {
-      h += '<div style="text-align:center;padding:36px 12px;color:var(--vscode-descriptionForeground)">';
-      h += '<p style="font-size:13px;margin-bottom:10px">' + (L === 'es' ? 'No hay epicas creadas.' : 'No epics created yet.') + '</p>';
-      h += '<button class="bp" style="display:inline-flex;width:auto;padding:7px 16px;font-size:12px" onclick="openCreateEpic()">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera epica' : 'Create first epic') + '</button>';
+
+    // Empty state: No epics and no tasks
+    if (epicKeys.length === 0 && allIds.length === 0) {
+      h += '<div class="card card-bg" style="text-align:center;padding:44px 20px;border-color:var(--vscode-panel-border);margin-top:16px">';
+      h += '<div style="display:flex;justify-content:center;margin-bottom:12px">';
+      h += '<div style="width:44px;height:44px;border-radius:22px;background:rgba(9,105,218,.12);display:flex;align-items:center;justify-content:center;color:var(--vscode-textLink-foreground)">';
+      h += '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>';
+      h += '</div>';
+      h += '</div>';
+      h += '<h2 style="font-size:17px;font-weight:700;margin-bottom:6px">' + (L === 'es' ? 'Crea tu primera tarea o conecta tus herramientas' : 'Create your first task or connect') + '</h2>';
+      h += '<p style="font-size:12px;color:var(--vscode-descriptionForeground);max-width:440px;margin:0 auto 20px;line-height:1.5">' + (L === 'es' ? 'No hay epicas ni tareas todavia. Puedes crear tu primera tarea localmente o conectar Jira y GitLab/GitHub para sincronizar tus tickets.' : 'No epics or tasks found yet. Create your first task locally or connect Jira and GitLab/GitHub to sync your tickets.') + '</p>';
+      h += '<div style="display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap">';
+      h += '<button class="bp" style="width:auto;padding:7px 18px;font-size:12px" onclick="showScr(\'create\')">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera tarea' : 'Create your first task') + '</button>';
+      h += '<button class="bs" style="width:auto;padding:7px 16px;font-size:12px" onclick="openCreateEpic()">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera epica' : 'Create first epic') + '</button>';
+      h += '<button class="bs" style="width:auto;padding:7px 16px;font-size:12px" onclick="startOb()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> ' + (L === 'es' ? 'Conectar' : 'Connect') + '</button>';
+      h += '</div>';
       h += '</div>';
     } else {
-      epicKeys.forEach(eid => {
-        const ep = epics[eid];
-        const epProg = getEpicProgress(eid);
-        const mstone = milestones[ep.milestoneId];
+      // Header with buttons
+      h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px">';
+      h += '<div>';
+      h += '<h1 style="font-size:18px;font-weight:700">' + (epicKeys.length > 0 ? (L === 'es' ? 'Epicas del Proyecto' : 'Project Epics') : t('tsk')) + '</h1>';
+      h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:2px">' + (epicKeys.length > 0 ? (L === 'es' ? 'Selecciona una epica para ver sus tareas' : 'Select an epic to view its tasks') : (L === 'es' ? 'Tareas del espacio de trabajo' : 'Workspace tasks')) + '</div>';
+      h += '</div>';
+      h += '<div style="display:flex;align-items:center;gap:6px">';
+      h += '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="openCreateEpic()">' + svgPlus + ' ' + (L === 'es' ? 'Nueva Epica' : 'New Epic') + '</button>';
+      h += '<button class="bp" style="width:auto;padding:6px 14px;font-size:12px" onclick="showScr(\'create\')">' + svgPlus + ' ' + t('newTask') + '</button>';
+      h += '</div>';
+      h += '</div>';
 
-        h += '<div class="epic-card" onclick="openEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Ver tareas de ' + (ep.name[L] || ep.name.es || ep.name) : 'View tasks for ' + (ep.name[L] || ep.name.en || ep.name)) + '">';
-        h += '<div style="display:flex;align-items:center;gap:12px">';
-        h += '<span style="width:12px;height:12px;border-radius:3px;background:' + ep.color + ';flex-shrink:0"></span>';
-        h += '<div style="flex:1;min-width:0">';
-        h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
-        h += '<span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--vscode-textLink-foreground)">' + ep.id + '</span>';
-        h += '<strong style="font-size:14px">' + (ep.name[L] || ep.name.es || ep.name) + '</strong>';
-        if (mstone) {
-          h += '<span class="badge" style="background:rgba(59,130,246,.12);color:#60a5fa">' + mstone.quarter + '</span>';
+      if (epicKeys.length === 0) {
+        // Has tasks without epics
+        allIds.forEach(id => {
+          h += renderTaskCard(id);
+        });
+      } else {
+        epicKeys.forEach(eid => {
+          const ep = epics[eid];
+          const epProg = getEpicProgress(eid);
+          const mstone = milestones[ep.milestoneId];
+
+          h += '<div class="epic-card" onclick="openEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Ver tareas de ' + (ep.name[L] || ep.name.es || ep.name) : 'View tasks for ' + (ep.name[L] || ep.name.en || ep.name)) + '">';
+          h += '<div style="display:flex;align-items:center;gap:12px">';
+          h += '<span style="width:12px;height:12px;border-radius:3px;background:' + ep.color + ';flex-shrink:0"></span>';
+          h += '<div style="flex:1;min-width:0">';
+          h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+          h += '<span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--vscode-textLink-foreground)">' + ep.id + '</span>';
+          h += '<strong style="font-size:14px">' + (ep.name[L] || ep.name.es || ep.name) + '</strong>';
+          if (mstone) {
+            h += '<span class="badge" style="background:rgba(59,130,246,.12);color:#60a5fa">' + mstone.quarter + '</span>';
+          }
+          h += '</div>';
+          h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">' + (ep.summary[L] || ep.summary.es || ep.summary) + '</div>';
+          h += '<div style="display:flex;align-items:center;gap:10px">';
+          h += '<span style="font-size:11px;color:#10b981;font-weight:600">' + epProg.done + '/' + epProg.total + ' ' + t('tsk') + ' (' + epProg.pct + '%)</span>';
+          h += '<div class="pbar" style="width:120px;margin-top:0"><div class="pbar-fill" style="width:' + epProg.pct + '%"></div></div>';
+          h += '</div>';
+          h += '</div>';
+          h += '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">';
+          h += '<button class="del-btn" style="color:var(--vscode-descriptionForeground)" onclick="event.stopPropagation();editEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Editar epica' : 'Edit epic') + '">' + svgEdit + '</button>';
+          h += '<button class="del-btn" onclick="event.stopPropagation();deleteEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Eliminar epica' : 'Delete epic') + '">' + svgDel + '</button>';
+          h += '<span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600;margin-left:4px">' + (L === 'es' ? 'Ver' : 'View') + '</span>';
+          h += svgChev;
+          h += '</div>';
+          h += '</div>';
+          h += '</div>';
+        });
+
+        // Unassigned tasks if any
+        const unassignedTasks = allIds.filter(id => !tasks[id].epicId || !epics[tasks[id].epicId]);
+        if (unassignedTasks.length > 0) {
+          h += '<div style="margin-top:20px;margin-bottom:10px;font-size:12px;font-weight:700;color:var(--vscode-descriptionForeground);text-transform:uppercase;letter-spacing:.05em">' + (L === 'es' ? 'Otras tareas sin epica' : 'Other tasks without epic') + '</div>';
+          unassignedTasks.forEach(id => {
+            h += renderTaskCard(id);
+          });
         }
-        h += '</div>';
-        h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">' + (ep.summary[L] || ep.summary.es || ep.summary) + '</div>';
-        h += '<div style="display:flex;align-items:center;gap:10px">';
-        h += '<span style="font-size:11px;color:#10b981;font-weight:600">' + epProg.done + '/' + epProg.total + ' ' + t('tsk') + ' (' + epProg.pct + '%)</span>';
-        h += '<div class="pbar" style="width:120px;margin-top:0"><div class="pbar-fill" style="width:' + epProg.pct + '%"></div></div>';
-        h += '</div>';
-        h += '</div>';
-        h += '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">';
-        h += '<button class="del-btn" style="color:var(--vscode-descriptionForeground)" onclick="event.stopPropagation();editEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Editar epica' : 'Edit epic') + '">' + svgEdit + '</button>';
-        h += '<button class="del-btn" onclick="event.stopPropagation();deleteEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Eliminar epica' : 'Delete epic') + '">' + svgDel + '</button>';
-        h += '<span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600;margin-left:4px">' + (L === 'es' ? 'Ver' : 'View') + '</span>';
-        h += svgChev;
-        h += '</div>';
-        h += '</div>';
-        h += '</div>';
-      });
+      }
     }
-
   } else {
     // LEVEL 2: Tareas de la Epica seleccionada
     const ep = epics[selectedEpicId] || { id: selectedEpicId, name: { es: selectedEpicId, en: selectedEpicId }, color: '#3b82f6', summary: { es: '', en: '' }, lead: '' };
@@ -1506,7 +1395,7 @@ function rCreateEpic(){
     ? (L === 'es' ? 'Editar Epica: ' + editingEpicId : 'Edit Epic: ' + editingEpicId)
     : (L === 'es' ? 'Crear Nueva Epica' : 'Create New Epic');
 
-  let h = '<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px;background:var(--vscode-titleBar-activeBackground)">' +
+  let h = '<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px;background:var(--vscode-sideBar-background)">' +
     '<button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">' +
       svgBack + (L === 'es' ? 'Epicas' : 'Epics') +
     '</button>' +
@@ -1622,7 +1511,7 @@ let newCriteria=[];
 function rCreate(){
   newCriteria=[''];
   const el=document.getElementById('sCreate');
-  el.innerHTML='<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px;background:var(--vscode-titleBar-activeBackground)"><button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">'+svgBack+t('tsk')+'</button><span style="color:var(--vscode-panel-border)">/</span><span style="font-weight:600">'+t('crTitle')+'</span></div><div class="ctr fi" id="crForm"></div>';
+  el.innerHTML='<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px;background:var(--vscode-sideBar-background)"><button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">'+svgBack+t('tsk')+'</button><span style="color:var(--vscode-panel-border)">/</span><span style="font-weight:600">'+t('crTitle')+'</span></div><div class="ctr fi" id="crForm"></div>';
   rCreateForm();
 }
 function rCreateForm(){
@@ -1630,9 +1519,12 @@ function rCreateForm(){
   let h='<label class="lbl" style="margin-top:8px">'+t('crTitleF')+'</label><input class="inp" id="nTitle" placeholder="'+(L==='es'?'Ej: Agregar boton de pago':'E.g. Add payment button')+'" style="margin-bottom:10px">';
   h+='<label class="lbl">'+t('crDescF')+'</label><textarea class="inp" id="nDesc" rows="3" style="resize:none;margin-bottom:10px" placeholder="'+(L==='es'?'Describe que hay que hacer...':'Describe what needs to be done...')+'"></textarea>';
   h+='<div style="display:flex;gap:8px;margin-bottom:10px"><div style="flex:1"><label class="lbl">'+t('crTypeF')+'</label><select class="inp" id="nType"><option value="story">Story</option><option value="bug">Bug</option><option value="spike">Spike</option></select></div><div style="flex:1"><label class="lbl">'+t('assigned')+'</label><select class="inp" id="nAssignee"><option value="me">'+(L==='es'?'Para mi':'Assigned to me')+'</option><option value="team">'+(L==='es'?'Equipo':'Team')+'</option></select></div></div>';
-  h+='<div style="margin-bottom:10px"><label class="lbl">'+t('epicLbl')+' & '+t('milestoneLbl')+'</label><select class="inp" id="nEpic">'+
-    Object.keys(epics).map(eid=>'<option value="'+eid+'">'+eid+': '+(epics[eid].name[L]||epics[eid].name.es||epics[eid].name)+' ('+(milestones[epics[eid].milestoneId]?milestones[epics[eid].milestoneId].quarter:'')+')</option>').join('')+
-  '</select></div>';
+  const epKeys = Object.keys(epics);
+  let epOpts = '<option value="">' + (L === 'es' ? '(Sin epica / General)' : '(No epic / General)') + '</option>';
+  if (epKeys.length > 0) {
+    epOpts += epKeys.map(eid => '<option value="' + eid + '">' + eid + ': ' + (epics[eid].name[L] || epics[eid].name.es || epics[eid].name) + '</option>').join('');
+  }
+  h += '<div style="margin-bottom:10px"><label class="lbl">' + t('epicLbl') + ' & ' + t('milestoneLbl') + '</label><select class="inp" id="nEpic">' + epOpts + '</select></div>';
   h+='<label class="lbl">'+t('crCritF')+'</label><div id="critList"></div>';
   h+='<button class="bs" style="margin-bottom:14px;font-size:12px;padding:6px" onclick="addCrit()">'+svgPlus+' '+t('crAdd')+'</button>';
   h+='<div style="display:flex;gap:8px"><button class="bs" onclick="showScr(\'home\')">'+t('crCancel')+'</button><button class="bp" onclick="saveNewTask()">'+t('crSave')+'</button></div>';
@@ -1650,8 +1542,8 @@ function saveNewTask(){
   const desc=document.getElementById('nDesc').value.trim();
   const type=document.getElementById('nType').value;
   const assignedTo=document.getElementById('nAssignee').value;
-  const epicId=document.getElementById('nEpic')?document.getElementById('nEpic').value:'EPIC-10';
-  const milestoneId=epics[epicId]?epics[epicId].milestoneId:'M-1';
+  const epicId = document.getElementById('nEpic') ? document.getElementById('nEpic').value : '';
+  const milestoneId = (epics[epicId] && epics[epicId].milestoneId) ? epics[epicId].milestoneId : '';
   if(!title){toast(L==='es'?'El titulo es obligatorio':'Title is required');return}
   const crit=newCriteria.filter(c=>c.trim());
   if(crit.length===0){toast(L==='es'?'Agrega al menos un criterio':'Add at least one criterion');return}
@@ -1681,7 +1573,7 @@ function rTk(){
   const tk=tasks[aTk];if(!tk)return;
   const total=gSt(tk);
   const isDoneTk = (tk.status[L] || tk.status.es || tk.status.en || tk.status || '').toLowerCase().includes('complet') || (tk.status[L] || tk.status.es || tk.status.en || tk.status || '').toLowerCase().includes('done');
-  let h='<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;justify-content:space-between;font-size:12px;background:var(--vscode-titleBar-activeBackground)"><div style="display:flex;align-items:center;gap:6px"><button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">'+svgBack+t('tsk')+'</button><span style="color:var(--vscode-panel-border)">/</span><span style="font-weight:700;color:var(--vscode-textLink-foreground);font-family:monospace">'+aTk+'</span><span class="badge" style="background:rgba(139,92,246,.12);color:#a78bfa">'+{story:'Story',bug:'Bug',spike:'Spike'}[tk.type]+'</span><button class="bs" style="width:auto;padding:2px 8px;font-size:11px;' + (isDoneTk ? 'border-color:#10b981;color:#10b981' : '') + '" onclick="toggleTaskComplete(\'' + aTk + '\')">' + (isDoneTk ? svgCheck + ' ' + (L === 'es' ? 'Completada' : 'Completed') : (L === 'es' ? 'Marcar completada' : 'Mark done')) + '</button></div><div style="display:flex;align-items:center;gap:4px">';
+  let h='<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;justify-content:space-between;font-size:12px;background:var(--vscode-sideBar-background)"><div style="display:flex;align-items:center;gap:6px"><button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">'+svgBack+t('tsk')+'</button><span style="color:var(--vscode-panel-border)">/</span><span style="font-weight:700;color:var(--vscode-textLink-foreground);font-family:monospace">'+aTk+'</span><span class="badge" style="background:rgba(139,92,246,.12);color:#a78bfa">'+{story:'Story',bug:'Bug',spike:'Spike'}[tk.type]+'</span><button class="bs" style="width:auto;padding:2px 8px;font-size:11px;' + (isDoneTk ? 'border-color:#10b981;color:#10b981' : '') + '" onclick="toggleTaskComplete(\'' + aTk + '\')">' + (isDoneTk ? svgCheck + ' ' + (L === 'es' ? 'Completada' : 'Completed') : (L === 'es' ? 'Marcar completada' : 'Mark done')) + '</button></div><div style="display:flex;align-items:center;gap:4px">';
   for(let i=1;i<=total;i++){if(i>1)h+='<div style="width:10px;height:1px;background:var(--vscode-panel-border)"></div>';h+='<div class="sd '+(i<cS?'sd-d':i===cS?'sd-a':'sd-p')+'"></div>'}
   h+='</div></div><div class="ctr fi" id="sC"></div>';
   document.getElementById('sTk').innerHTML=h;

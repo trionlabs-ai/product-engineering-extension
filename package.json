@@ -2,17 +2,17 @@
   "name": "product-studio",
   "displayName": "Product Studio",
   "description": "Simplified IDE experience for Product Engineers: work on Jira tickets with AI, test, review and submit merge requests.",
-  "version": "1.9.2",
+  "version": "1.9.4",
   "publisher": "product-engineering",
   "license": "MIT",
   "icon": "media/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/product-engineering/product-studio-extension"
+    "url": "https://github.com/fersiguenza/product-engineering-extension.git"
   },
-  "homepage": "https://github.com/product-engineering/product-studio-extension#readme",
+  "homepage": "https://github.com/fersiguenza/product-engineering-extension#readme",
   "bugs": {
-    "url": "https://github.com/product-engineering/product-studio-extension/issues"
+    "url": "https://github.com/fersiguenza/product-engineering-extension/issues"
   },
   "keywords": [
     "product-engineer",
@@ -28,8 +28,12 @@
   "engines": {
     "vscode": "^1.80.0"
   },
-  "categories": ["Other"],
-  "activationEvents": ["onStartupFinished"],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./extension.js",
   "scripts": {
     "vscode:prepublish": "node -c extension.js",
@@ -41,22 +45,42 @@
   },
   "contributes": {
     "commands": [
-      { "command": "productStudio.open", "title": "Product Studio: Open" },
-      { "command": "productStudio.resetOnboarding", "title": "Product Studio: Reset Onboarding" },
-      { "command": "productStudio.createTask", "title": "Product Studio: Create Task" }
+      {
+        "command": "productStudio.open",
+        "title": "Product Studio: Open"
+      },
+      {
+        "command": "productStudio.resetOnboarding",
+        "title": "Product Studio: Reset Onboarding"
+      },
+      {
+        "command": "productStudio.createTask",
+        "title": "Product Studio: Create Task"
+      }
     ],
     "configuration": {
       "title": "Product Studio",
       "properties": {
         "productStudio.language": {
           "type": "string",
-          "enum": ["auto", "es", "en"],
+          "enum": [
+            "auto",
+            "es",
+            "en"
+          ],
           "default": "auto",
           "description": "Language for the Product Studio UI. 'auto' detects from VS Code."
         },
         "productStudio.ai.provider": {
           "type": "string",
-          "enum": ["Claude", "GitHub Copilot", "Antigravity", "Continue", "Ollama", "ChatGPT"],
+          "enum": [
+            "Claude",
+            "GitHub Copilot",
+            "Antigravity",
+            "Continue",
+            "Ollama",
+            "ChatGPT"
+          ],
           "default": "Claude",
           "description": "Default AI assistant to connect and sync ticket prompts with."
         },
@@ -67,7 +91,10 @@
         },
         "productStudio.git.provider": {
           "type": "string",
-          "enum": ["gitlab", "github"],
+          "enum": [
+            "gitlab",
+            "github"
+          ],
           "default": "gitlab"
         },
         "productStudio.git.repository": {

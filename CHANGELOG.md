@@ -2,6 +2,22 @@
 
 All notable changes to Product Studio are documented here.
 
+## [1.9.4] - 2026-11-15
+
+### Changed
+- **Removed Demo Data**: Epics, milestones, and tasks are now empty by default so developers start with a fresh workspace without placeholder data.
+- **First Task or Connect Empty State**: When no epics or tasks are present, displays a clean prompt to create your first task, create an epic, or connect your tools.
+
+### Fixed
+- **Flow Demo GIF Navigation & Viewport**: Cropped bottom pixels to permanently eliminate any duplicate navigation bar at the bottom of the animation.
+- **Sub-header Styling Hierarchy**: Updated ticket and creation sub-navigation bars to use sidebar background rather than matching the global titlebar background, ensuring clean visual distinction.
+- **Extension Media Resolution**: Updated repository metadata to ensure the animated demo GIF renders reliably in VS Code and Antigravity IDE extension description tabs.
+
+## [1.9.3] - 2026-11-15
+
+### Fixed
+- **README Flow GIF Display**: Updated image URL and repository metadata in `package.json` to `https://github.com/fersiguenza/product-engineering-extension`. Direct raw GitHub image URL ensures seamless rendering across VS Code and Antigravity extension details views.
+
 ## [1.9.2] - 2026-11-15
 
 ### Changed
