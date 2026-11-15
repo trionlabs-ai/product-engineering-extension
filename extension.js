@@ -51,6 +51,11 @@ function activate(context) {
     return getState('tasks', null);
   }
 
+  // Load stored epics or use defaults
+  function getEpics() {
+    return getState('epics', null);
+  }
+
   function getDockerStatus() {
     return new Promise(resolve => {
       cp.exec('docker --version', (err, stdout) => {
@@ -180,7 +185,8 @@ function activate(context) {
       getTasks(),
       ticketId,
       getDetectedExts(),
-      getActiveAi()
+      getActiveAi(),
+      getEpics()
     );
 
     mainPanel.webview.onDidReceiveMessage(async msg => {
@@ -205,6 +211,20 @@ function activate(context) {
           break;
         case 'saveTasks':
           setState('tasks', msg.tasks);
+          break;
+        case 'saveEpics':
+          setState('epics', msg.epics);
+          break;
+        case 'confirmDeleteEpic':
+          const yesEp = lang === 'es' ? 'Eliminar' : 'Delete';
+          const promptEp = (lang === 'es' ? 'Eliminar epica ' : 'Delete epic ') + msg.epicId + '? ' + (lang === 'es' ? 'Las tareas asociadas quedaran sin epica asignada.' : 'Associated tasks will become unassigned.');
+          const respEp = await vscode.window.showWarningMessage(
+            promptEp,
+            { modal: true }, yesEp
+          );
+          if (respEp === yesEp) {
+            mainPanel.webview.postMessage({ type: 'deleteEpicConfirmed', epicId: msg.epicId });
+          }
           break;
         case 'openExternal':
           if (msg.url) {
@@ -264,13 +284,14 @@ function activate(context) {
             getTasks(),
             null,
             getDetectedExts(),
-            getActiveAi()
+            getActiveAi(),
+            getEpics()
           );
           break;
         case 'resetOnboarding':
           setState('onboarded', false);
           setState('connectedTools', []);
-          mainPanel.webview.html = getMainHtml(lang, false, [], getTasks(), null, getDetectedExts(), getActiveAi());
+          mainPanel.webview.html = getMainHtml(lang, false, [], getTasks(), null, getDetectedExts(), getActiveAi(), getEpics());
           break;
         case 'confirmDelete':
           const yes = lang === 'es' ? 'Eliminar' : 'Delete';
@@ -372,7 +393,7 @@ function activate(context) {
     vscode.commands.registerCommand('productStudio.resetOnboarding', () => {
       setState('onboarded', false);
       setState('connectedTools', []);
-      if (mainPanel) mainPanel.webview.html = getMainHtml(getLang(), false, [], getTasks(), null, getDetectedExts(), getActiveAi());
+      if (mainPanel) mainPanel.webview.html = getMainHtml(getLang(), false, [], getTasks(), null, getDetectedExts(), getActiveAi(), getEpics());
       vscode.window.showInformationMessage('Product Studio: Onboarding reset.');
     })
   );
@@ -383,8 +404,9 @@ function activate(context) {
 // =====================================================================
 // MAIN WEBVIEW — Full app
 // =====================================================================
-function getMainHtml(lang, onboarded, connectedTools, storedTasks, initialTicket, detectedExts, activeAi) {
+function getMainHtml(lang, onboarded, connectedTools, storedTasks, initialTicket, detectedExts, activeAi, storedEpics) {
   const tasksJson = JSON.stringify(storedTasks || null);
+  const epicsJson = JSON.stringify(storedEpics || null);
   const connJson = JSON.stringify(connectedTools || []);
   const detectedJson = JSON.stringify(detectedExts || { gitlab: false, github: false, jira: false });
   const aiProvider = activeAi || 'Claude';
@@ -419,10 +441,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 #sOb #cList{flex:1 1 auto;min-height:160px;max-height:360px;overflow-y:auto}
 .card{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:14px;margin-bottom:12px}
 .card-bg{background:var(--vscode-sideBar-background)}
-.bp{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
-.bp:hover{opacity:.9}
-.bs{background:transparent;border:1px solid var(--vscode-panel-border);border-radius:8px;padding:10px;font-size:13px;font-weight:500;cursor:pointer;width:100%;color:var(--vscode-descriptionForeground);display:flex;align-items:center;justify-content:center;gap:6px}
-.bs:hover{border-color:var(--vscode-focusBorder);color:var(--vscode-foreground)}
+.bp{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:4px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
+.bp:hover{background:var(--vscode-button-hoverBackground)}
+.bs{background:transparent;border:1px solid var(--vscode-panel-border);border-radius:4px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;width:100%;color:var(--vscode-foreground);display:flex;align-items:center;justify-content:center;gap:6px}
+.bs:hover{background:var(--vscode-toolbar-hoverBackground);border-color:var(--vscode-focusBorder)}
+.task-check-circle{width:16px;height:16px;border-radius:3px;border:1px solid var(--vscode-panel-border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--vscode-button-foreground);padding:0;flex-shrink:0}
+.task-check-circle:hover{border-color:var(--vscode-focusBorder)}
+.task-check-circle.checked{background:var(--vscode-button-background);border-color:var(--vscode-button-background)}
+.task-check-circle.checked svg{width:11px;height:11px}
 .bg{background:#e24329;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
 .bg:hover{background:#c0341d}
 .inp{width:100%;background:var(--vscode-input-background);border:1px solid var(--vscode-input-border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--vscode-input-foreground);outline:none}
@@ -509,6 +535,7 @@ select.inp{cursor:pointer}
   <div id="sTk" style="display:none"></div>
   <div id="sSet" style="display:none"></div>
   <div id="sCreate" style="display:none"></div>
+  <div id="sCreateEpic" style="display:none"></div>
   <div id="sEnv" style="display:none"></div>
   <div id="sAi" style="display:none"></div>
 </div>
@@ -524,6 +551,7 @@ let selC=new Set(); // Start empty - let user pick their own stack!
 let aTk=null,cS=1,filterMode='all';
 
 const svgCheck='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>';
+const svgEdit='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 2 2h14a2 2 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
 const svgChat='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
 const svgPlus='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
 const svgBack='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>';
@@ -693,14 +721,32 @@ const defaultMilestones = {
   }
 };
 
-let epics = defaultEpics;
+let epics = ${epicsJson} || JSON.parse(JSON.stringify(defaultEpics));
 let milestones = defaultMilestones;
 let selectedEpicId = null; // null = list of epics; string = tasks in that epic
+let editingEpicId = null; // null = new epic, string = editing existing epic
 let mainViewMode = 'epics'; // 'epics' | 'allTasks'
+
+function saveEpics(){vsc.postMessage({type:'saveEpics',epics});}
 
 function openEpic(eid){selectedEpicId = eid; rHome();}
 function closeEpic(){selectedEpicId = null; rHome();}
 function setMainViewMode(mode){mainViewMode = mode; selectedEpicId = null; rHome();}
+
+function openCreateEpic(){
+  editingEpicId = null;
+  showScr('createEpic');
+}
+
+function editEpic(eid){
+  editingEpicId = eid;
+  showScr('createEpic');
+}
+
+function deleteEpic(eid){
+  vsc.postMessage({type:'confirmDeleteEpic',epicId:eid});
+}
+
 function createTaskInEpic(eid){
   selectedEpicId = eid;
   showScr('create');
@@ -889,11 +935,11 @@ function saveTasks(){vsc.postMessage({type:'saveTasks',tasks})}
 
 // Screen management
 function showScr(n){
-  ['sOb','sHome','sTk','sSet','sCreate','sEnv','sAi'].forEach(id=>{
+  ['sOb','sHome','sTk','sSet','sCreate','sCreateEpic','sEnv','sAi'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.style.display='none';
   });
-  const map={onboarding:'sOb',home:'sHome',ticket:'sTk',settings:'sSet',create:'sCreate',env:'sEnv',ai:'sAi'};
+  const map={onboarding:'sOb',home:'sHome',ticket:'sTk',settings:'sSet',create:'sCreate',createEpic:'sCreateEpic',env:'sEnv',ai:'sAi'};
   if(map[n] && document.getElementById(map[n])) {
     document.getElementById(map[n]).style.display='';
   }
@@ -901,6 +947,7 @@ function showScr(n){
   if(n==='home')rHome();
   if(n==='settings')rSet();
   if(n==='create')rCreate();
+  if(n==='createEpic')rCreateEpic();
   if(n==='env')rEnv();
   if(n==='ai')rAi();
   updTop();
@@ -1008,7 +1055,7 @@ function rObS(){
       if(isExtDet){
         detectedTag='<span class="ext-badge" style="font-size:8px;padding:1px 4px">'+svgCheck+' VS</span>';
       }
-      let popBadge = isPop ? '<span style="font-size:10px;color:var(--vscode-focusBorder);margin-left:auto;font-weight:700">★</span>' : '';
+      let popBadge = isPop ? '<span style="font-size:10px;color:var(--vscode-focusBorder);margin-left:auto;font-weight:700">POP</span>' : '';
 
       h+='<div class="cc'+(s?' sel':'')+'" data-name="'+cn.n+'" data-cat="'+cn.c+'" data-pop="'+(isPop?'1':'0')+'" data-desc="'+d.replace(/"/g,'&quot;')+'" title="'+tipText.replace(/"/g,'&quot;')+'" onclick="tC(this)">'+
         (lg[cn.n]||'') +
@@ -1126,16 +1173,41 @@ function finOb(){
 }
 
 // ---- HOME / BACKLOG ----
+function toggleTaskComplete(id){
+  const tk = tasks[id];
+  if (!tk) return;
+  const stLower = (tk.status[L] || tk.status.es || tk.status.en || tk.status || '').toLowerCase();
+  const wasDone = stLower.includes('complet') || stLower.includes('done');
+  if (wasDone) {
+    tk.status = { es: 'En curso', en: 'In progress' };
+    tk.color = 'blue';
+    toast(L === 'es' ? 'Tarea marcada como en curso: ' + id : 'Task marked as in progress: ' + id);
+  } else {
+    tk.status = { es: 'Completado', en: 'Completed' };
+    tk.color = 'green';
+    toast(L === 'es' ? 'Tarea completada: ' + id : 'Task completed: ' + id);
+  }
+  saveTasks();
+  if (aTk === id && document.getElementById('sTk') && document.getElementById('sTk').style.display !== 'none') {
+    rTk();
+  }
+  rHome();
+}
+
 function renderTaskCard(id) {
   const tk = tasks[id];
   if (!tk) return '';
   const title = tk.title[L] || tk.title.es || tk.title.en || tk.title;
   const status = tk.status[L] || tk.status.es || tk.status.en || tk.status;
   const stLower = (status || '').toLowerCase();
+  const isDone = stLower.includes('complet') || stLower.includes('done');
   
   let stBg = 'rgba(59,130,246,.12)';
   let stCol = '#60a5fa';
-  if (stLower.includes('revis') || stLower.includes('review')) {
+  if (isDone) {
+    stBg = 'rgba(16,185,129,.15)';
+    stCol = '#10b981';
+  } else if (stLower.includes('revis') || stLower.includes('review')) {
     stBg = 'rgba(245,158,11,.15)';
     stCol = '#f59e0b';
   } else if (stLower.includes('backlog')) {
@@ -1151,11 +1223,14 @@ function renderTaskCard(id) {
   const isMine = tk.assignedTo === 'me';
 
   return '<div class="task-card" onclick="openTk(\'' + id + '\')" title="' + (L === 'es' ? 'Click para trabajar en tarea' : 'Click to work on task') + '">' +
+    '<button class="task-check-circle ' + (isDone ? 'checked' : '') + '" onclick="event.stopPropagation();toggleTaskComplete(\'' + id + '\')" title="' + (isDone ? (L === 'es' ? 'Reabrir tarea' : 'Reopen task') : (L === 'es' ? 'Marcar como completada' : 'Mark as completed')) + '">' +
+      (isDone ? svgCheck : '') +
+    '</button>' +
     '<span class="badge" style="background:' + stBg + ';color:' + stCol + ';flex-shrink:0">' + status + '</span>' +
     '<div style="flex:1;min-width:0">' +
       '<div style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:3px">' +
         '<span style="font-family:monospace;color:var(--vscode-textLink-foreground);font-weight:700">' + id + '</span>' +
-        '<span style="overflow:hidden;text-overflow:ellipsis">' + title + '</span>' +
+        '<span style="overflow:hidden;text-overflow:ellipsis;' + (isDone ? 'text-decoration:line-through;opacity:.75' : '') + '">' + title + '</span>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--vscode-descriptionForeground)">' +
         '<span style="color:#10b981;font-weight:600">' + svgCheck + ' ' + testCount + ' tests</span>' +
@@ -1165,7 +1240,7 @@ function renderTaskCard(id) {
       '</div>' +
     '</div>' +
     '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
-      '<span class="badge" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:4px 8px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px">' +
+      '<span class="badge" style="background:var(--vscode-button-secondaryBackground, rgba(255,255,255,.06));color:var(--vscode-foreground);border:1px solid var(--vscode-panel-border);padding:3px 8px;font-size:11px;font-weight:500;display:flex;align-items:center;gap:4px">' +
         (L === 'es' ? 'Trabajar' : 'Work') + ' ' + svgChev +
       '</span>' +
       '<button class="del-btn" onclick="event.stopPropagation();delTk(\'' + id + '\')" title="' + t('delTask') + '">' + svgDel + '</button>' +
@@ -1181,58 +1256,71 @@ function rHome(){
   let h = '<div class="ctr fi">';
 
   if (selectedEpicId === null) {
-    // LEVEL 1: Listado de Épicas
-    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">';
+    // LEVEL 1: Listado de Epicas
+    h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px">';
     h += '<div>';
-    h += '<h1 style="font-size:18px;font-weight:700">' + (L === 'es' ? 'Épicas del Proyecto' : 'Project Epics') + '</h1>';
-    h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:2px">' + (L === 'es' ? 'Selecciona una épica para ver sus tareas' : 'Select an epic to view its tasks') + '</div>';
+    h += '<h1 style="font-size:18px;font-weight:700">' + (L === 'es' ? 'Epicas del Proyecto' : 'Project Epics') + '</h1>';
+    h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:2px">' + (L === 'es' ? 'Selecciona una epica para ver sus tareas' : 'Select an epic to view its tasks') + '</div>';
     h += '</div>';
+    h += '<div style="display:flex;align-items:center;gap:6px">';
+    h += '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="openCreateEpic()">' + svgPlus + ' ' + (L === 'es' ? 'Nueva Epica' : 'New Epic') + '</button>';
     h += '<button class="bp" style="width:auto;padding:6px 14px;font-size:12px" onclick="showScr(\'create\')">' + svgPlus + ' ' + t('newTask') + '</button>';
     h += '</div>';
+    h += '</div>';
 
-    Object.keys(epics).forEach(eid => {
-      const ep = epics[eid];
-      const epProg = getEpicProgress(eid);
-      const mstone = milestones[ep.milestoneId];
+    const epicKeys = Object.keys(epics);
+    if (epicKeys.length === 0) {
+      h += '<div style="text-align:center;padding:36px 12px;color:var(--vscode-descriptionForeground)">';
+      h += '<p style="font-size:13px;margin-bottom:10px">' + (L === 'es' ? 'No hay epicas creadas.' : 'No epics created yet.') + '</p>';
+      h += '<button class="bp" style="display:inline-flex;width:auto;padding:7px 16px;font-size:12px" onclick="openCreateEpic()">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera epica' : 'Create first epic') + '</button>';
+      h += '</div>';
+    } else {
+      epicKeys.forEach(eid => {
+        const ep = epics[eid];
+        const epProg = getEpicProgress(eid);
+        const mstone = milestones[ep.milestoneId];
 
-      h += '<div class="epic-card" onclick="openEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Ver tareas de ' + (ep.name[L] || ep.name.es || ep.name) : 'View tasks for ' + (ep.name[L] || ep.name.en || ep.name)) + '">';
-      h += '<div style="display:flex;align-items:center;gap:12px">';
-      h += '<span style="width:12px;height:12px;border-radius:3px;background:' + ep.color + ';flex-shrink:0"></span>';
-      h += '<div style="flex:1;min-width:0">';
-      h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
-      h += '<span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--vscode-textLink-foreground)">' + ep.id + '</span>';
-      h += '<strong style="font-size:14px">' + (ep.name[L] || ep.name.es || ep.name) + '</strong>';
-      if (mstone) {
-        h += '<span class="badge" style="background:rgba(59,130,246,.12);color:#60a5fa">' + mstone.quarter + '</span>';
-      }
-      h += '</div>';
-      h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">' + (ep.summary[L] || ep.summary.es || ep.summary) + '</div>';
-      h += '<div style="display:flex;align-items:center;gap:10px">';
-      h += '<span style="font-size:11px;color:#10b981;font-weight:600">' + epProg.done + '/' + epProg.total + ' ' + t('tsk') + ' (' + epProg.pct + '%)</span>';
-      h += '<div class="pbar" style="width:120px;margin-top:0"><div class="pbar-fill" style="width:' + epProg.pct + '%"></div></div>';
-      h += '</div>';
-      h += '</div>';
-      h += '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">';
-      h += '<span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">' + (L === 'es' ? 'Ver tareas' : 'View tasks') + '</span>';
-      h += svgChev;
-      h += '</div>';
-      h += '</div>';
-      h += '</div>';
-    });
+        h += '<div class="epic-card" onclick="openEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Ver tareas de ' + (ep.name[L] || ep.name.es || ep.name) : 'View tasks for ' + (ep.name[L] || ep.name.en || ep.name)) + '">';
+        h += '<div style="display:flex;align-items:center;gap:12px">';
+        h += '<span style="width:12px;height:12px;border-radius:3px;background:' + ep.color + ';flex-shrink:0"></span>';
+        h += '<div style="flex:1;min-width:0">';
+        h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
+        h += '<span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--vscode-textLink-foreground)">' + ep.id + '</span>';
+        h += '<strong style="font-size:14px">' + (ep.name[L] || ep.name.es || ep.name) + '</strong>';
+        if (mstone) {
+          h += '<span class="badge" style="background:rgba(59,130,246,.12);color:#60a5fa">' + mstone.quarter + '</span>';
+        }
+        h += '</div>';
+        h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">' + (ep.summary[L] || ep.summary.es || ep.summary) + '</div>';
+        h += '<div style="display:flex;align-items:center;gap:10px">';
+        h += '<span style="font-size:11px;color:#10b981;font-weight:600">' + epProg.done + '/' + epProg.total + ' ' + t('tsk') + ' (' + epProg.pct + '%)</span>';
+        h += '<div class="pbar" style="width:120px;margin-top:0"><div class="pbar-fill" style="width:' + epProg.pct + '%"></div></div>';
+        h += '</div>';
+        h += '</div>';
+        h += '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">';
+        h += '<button class="del-btn" style="color:var(--vscode-descriptionForeground)" onclick="event.stopPropagation();editEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Editar epica' : 'Edit epic') + '">' + svgEdit + '</button>';
+        h += '<button class="del-btn" onclick="event.stopPropagation();deleteEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Eliminar epica' : 'Delete epic') + '">' + svgDel + '</button>';
+        h += '<span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600;margin-left:4px">' + (L === 'es' ? 'Ver' : 'View') + '</span>';
+        h += svgChev;
+        h += '</div>';
+        h += '</div>';
+        h += '</div>';
+      });
+    }
 
   } else {
-    // LEVEL 2: Tareas de la Épica seleccionada
+    // LEVEL 2: Tareas de la Epica seleccionada
     const ep = epics[selectedEpicId] || { id: selectedEpicId, name: { es: selectedEpicId, en: selectedEpicId }, color: '#3b82f6', summary: { es: '', en: '' }, lead: '' };
     const epProg = getEpicProgress(selectedEpicId);
     const epTasks = allIds.filter(id => tasks[id].epicId === selectedEpicId);
 
     h += '<div style="margin-bottom:14px">';
     h += '<button class="bs" style="width:auto;display:inline-flex;padding:5px 12px;font-size:12px;margin-bottom:10px" onclick="closeEpic()">';
-    h += svgBack + ' ' + (L === 'es' ? 'Volver al listado de Épicas' : 'Back to Epics list');
+    h += svgBack + ' ' + (L === 'es' ? 'Volver al listado de Epicas' : 'Back to Epics list');
     h += '</button>';
     
-    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start">';
-    h += '<div>';
+    h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">';
+    h += '<div style="flex:1;min-width:0">';
     h += '<div style="display:flex;align-items:center;gap:8px">';
     h += '<span style="width:10px;height:10px;border-radius:2px;background:' + ep.color + '"></span>';
     h += '<span style="font-family:monospace;font-size:12px;font-weight:700;color:var(--vscode-textLink-foreground)">' + ep.id + '</span>';
@@ -1240,20 +1328,24 @@ function rHome(){
     h += '</div>';
     h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:4px">' + (ep.summary[L] || ep.summary.es || ep.summary) + (ep.lead ? ' · <em>' + ep.lead + '</em>' : '') + '</div>';
     h += '</div>';
+    h += '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">';
+    h += '<button class="bs" style="width:auto;padding:5px 10px;font-size:11px" onclick="editEpic(\'' + selectedEpicId + '\')" title="' + (L === 'es' ? 'Editar epica' : 'Edit epic') + '">' + svgEdit + ' ' + (L === 'es' ? 'Editar' : 'Edit') + '</button>';
+    h += '<button class="del-btn" onclick="deleteEpic(\'' + selectedEpicId + '\')" title="' + (L === 'es' ? 'Eliminar epica' : 'Delete epic') + '">' + svgDel + '</button>';
     h += '<button class="bp" style="width:auto;padding:6px 12px;font-size:12px" onclick="createTaskInEpic(\'' + selectedEpicId + '\')">';
     h += svgPlus + ' ' + t('newTask');
     h += '</button>';
     h += '</div>';
+    h += '</div>';
 
     h += '<div style="display:flex;align-items:center;gap:10px;margin-top:10px">';
-    h += '<span style="font-size:11px;color:#10b981;font-weight:600">' + epProg.done + '/' + epProg.total + ' ' + (L === 'es' ? 'tareas completadas o en revisión' : 'tasks done or in review') + ' (' + epProg.pct + '%)</span>';
+    h += '<span style="font-size:11px;color:#10b981;font-weight:600">' + epProg.done + '/' + epProg.total + ' ' + (L === 'es' ? 'tareas completadas o en revision' : 'tasks done or in review') + ' (' + epProg.pct + '%)</span>';
     h += '<div class="pbar" style="width:140px;margin-top:0"><div class="pbar-fill" style="width:' + epProg.pct + '%"></div></div>';
     h += '</div>';
     h += '</div>';
 
     if (epTasks.length === 0) {
       h += '<div style="text-align:center;padding:30px 10px;color:var(--vscode-descriptionForeground)">';
-      h += '<p style="font-size:13px;margin-bottom:8px">' + (L === 'es' ? 'No hay tareas creadas en esta épica todavía.' : 'No tasks created in this epic yet.') + '</p>';
+      h += '<p style="font-size:13px;margin-bottom:8px">' + (L === 'es' ? 'No hay tareas creadas en esta epica todavia.' : 'No tasks created in this epic yet.') + '</p>';
       h += '<button class="bp" style="display:inline-flex;width:auto;padding:6px 14px;font-size:12px" onclick="createTaskInEpic(\'' + selectedEpicId + '\')">' + svgPlus + ' ' + t('newTask') + '</button>';
       h += '</div>';
     } else {
@@ -1268,6 +1360,136 @@ function rHome(){
 }
 
 function delTk(id){vsc.postMessage({type:'confirmDelete',ticketId:id})}
+// ---- EPIC CRUD ----
+let selectedEpicColor = '#0969da';
+
+function rCreateEpic(){
+  const el = document.getElementById('sCreateEpic');
+  if (!el) return;
+  const isEdit = !!editingEpicId;
+  const ep = isEdit ? (epics[editingEpicId] || {}) : {};
+  selectedEpicColor = ep.color || '#8b5cf6';
+
+  const epName = isEdit ? (ep.name[L] || ep.name.es || ep.name.en || ep.name || '') : '';
+  const epSummary = isEdit ? (ep.summary[L] || ep.summary.es || ep.summary.en || ep.summary || '') : '';
+  const epLead = ep.lead || '';
+  const epMilestone = ep.milestoneId || 'M-1';
+  const epKey = ep.key || '';
+
+  const titleHeader = isEdit
+    ? (L === 'es' ? 'Editar Epica: ' + editingEpicId : 'Edit Epic: ' + editingEpicId)
+    : (L === 'es' ? 'Crear Nueva Epica' : 'Create New Epic');
+
+  let h = '<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px;background:var(--vscode-titleBar-activeBackground)">' +
+    '<button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">' +
+      svgBack + (L === 'es' ? 'Epicas' : 'Epics') +
+    '</button>' +
+    '<span style="color:var(--vscode-panel-border)">/</span>' +
+    '<span style="font-weight:600">' + titleHeader + '</span>' +
+  '</div>';
+
+  h += '<div class="ctr fi" style="max-width:540px;margin:0 auto;padding-top:16px">';
+
+  h += '<label class="lbl">' + (L === 'es' ? 'Nombre de la epica' : 'Epic Name') + ' *</label>';
+  h += '<input class="inp" id="nEpicName" value="' + epName.replace(/"/g, '&quot;') + '" placeholder="' + (L === 'es' ? 'Ej: Integracion Pasarela de Pagos Stripe' : 'E.g. Stripe Payment Gateway Integration') + '" style="margin-bottom:12px">';
+
+  h += '<div style="display:flex;gap:10px;margin-bottom:12px">';
+  h += '<div style="flex:1">';
+  h += '<label class="lbl">' + (L === 'es' ? 'Clave corta (Key)' : 'Short Key') + '</label>';
+  h += '<input class="inp" id="nEpicKey" value="' + epKey.replace(/"/g, '&quot;') + '" placeholder="Ej: PAYMENTS" style="text-transform:uppercase">';
+  h += '</div>';
+  h += '<div style="flex:1">';
+  h += '<label class="lbl">' + (L === 'es' ? 'Hito / Milestone' : 'Milestone') + '</label>';
+  h += '<select class="inp" id="nEpicMilestone">';
+  Object.keys(milestones).forEach(mid => {
+    const m = milestones[mid];
+    const sel = mid === epMilestone ? ' selected' : '';
+    h += '<option value="' + mid + '"' + sel + '>' + mid + ': ' + (m.quarter || '') + ' - ' + (m.title[L] || m.title.es || m.title.en || m.title) + '</option>';
+  });
+  h += '</select>';
+  h += '</div>';
+  h += '</div>';
+
+  h += '<label class="lbl">' + (L === 'es' ? 'Responsable / Lead' : 'Lead / Owner') + '</label>';
+  h += '<input class="inp" id="nEpicLead" value="' + epLead.replace(/"/g, '&quot;') + '" placeholder="' + (L === 'es' ? 'Ej: Alex R. (Product Lead)' : 'E.g. Alex R. (Product Lead)') + '" style="margin-bottom:12px">';
+
+  h += '<label class="lbl">' + (L === 'es' ? 'Objetivo y alcance de la epica' : 'Epic Goal & Summary') + '</label>';
+  h += '<textarea class="inp" id="nEpicSummary" rows="3" style="resize:none;margin-bottom:12px" placeholder="' + (L === 'es' ? 'Describe el impacto de negocio y objetivos tecnicos...' : 'Describe business impact and technical goals...') + '">' + epSummary + '</textarea>';
+
+  // Clean single accent
+  selectedEpicColor = '#0969da';
+
+  h += '<div style="display:flex;gap:10px">';
+  h += '<button class="bs" onclick="showScr(\'home\')">' + (L === 'es' ? 'Cancelar' : 'Cancel') + '</button>';
+  h += '<button class="bp" onclick="saveEpicForm()">' + (isEdit ? (L === 'es' ? 'Guardar Cambios' : 'Save Changes') : (L === 'es' ? 'Crear Epica' : 'Create Epic')) + '</button>';
+  h += '</div>';
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+
+function saveEpicForm(){
+  const nameEl = document.getElementById('nEpicName');
+  const summaryEl = document.getElementById('nEpicSummary');
+  const leadEl = document.getElementById('nEpicLead');
+  const mileEl = document.getElementById('nEpicMilestone');
+  const keyEl = document.getElementById('nEpicKey');
+
+  const name = nameEl ? nameEl.value.trim() : '';
+  const summary = summaryEl ? summaryEl.value.trim() : '';
+  const lead = leadEl ? leadEl.value.trim() : '';
+  const milestoneId = mileEl ? mileEl.value : 'M-1';
+  let key = keyEl ? keyEl.value.trim().toUpperCase() : '';
+
+  if (!name) {
+    toast(L === 'es' ? 'El nombre de la epica es obligatorio' : 'Epic name is required');
+    return;
+  }
+
+  if (editingEpicId) {
+    const ep = epics[editingEpicId];
+    if (ep) {
+      ep.name = { es: name, en: name };
+      ep.summary = { es: summary, en: summary };
+      ep.lead = lead;
+      ep.color = selectedEpicColor;
+      ep.milestoneId = milestoneId;
+      if (key) ep.key = key;
+    }
+    saveEpics();
+    toast(L === 'es' ? 'Epica actualizada: ' + editingEpicId : 'Epic updated: ' + editingEpicId);
+    selectedEpicId = editingEpicId;
+    showScr('home');
+  } else {
+    const maxNum = Math.max(0, ...Object.keys(epics).map(k => {
+      const m = k.match(/EPIC-(\d+)/);
+      return m ? parseInt(m[1], 10) : 0;
+    }));
+    const newId = 'EPIC-' + (maxNum + 1);
+    if (!key) key = name.substring(0, 8).toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    epics[newId] = {
+      id: newId,
+      key: key || 'EPIC',
+      name: { es: name, en: name },
+      summary: { es: summary, en: summary },
+      color: selectedEpicColor,
+      milestoneId: milestoneId,
+      lead: lead
+    };
+
+    if (milestones[milestoneId] && !milestones[milestoneId].epicIds.includes(newId)) {
+      milestones[milestoneId].epicIds.push(newId);
+    }
+
+    saveEpics();
+    toast((L === 'es' ? 'Epica creada: ' : 'Epic created: ') + newId);
+    selectedEpicId = newId;
+    showScr('home');
+  }
+}
+
 
 // ---- CREATE TASK ----
 let newCriteria=[];
@@ -1331,7 +1553,8 @@ function gSt(tk){return tk.type==='spike'?4:5}
 function rTk(){
   const tk=tasks[aTk];if(!tk)return;
   const total=gSt(tk);
-  let h='<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;justify-content:space-between;font-size:12px;background:var(--vscode-titleBar-activeBackground)"><div style="display:flex;align-items:center;gap:6px"><button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">'+svgBack+t('tsk')+'</button><span style="color:var(--vscode-panel-border)">/</span><span style="font-weight:700;color:var(--vscode-textLink-foreground);font-family:monospace">'+aTk+'</span><span class="badge" style="background:rgba(139,92,246,.12);color:#a78bfa">'+{story:'Story',bug:'Bug',spike:'Spike'}[tk.type]+'</span></div><div style="display:flex;align-items:center;gap:4px">';
+  const isDoneTk = (tk.status[L] || tk.status.es || tk.status.en || tk.status || '').toLowerCase().includes('complet') || (tk.status[L] || tk.status.es || tk.status.en || tk.status || '').toLowerCase().includes('done');
+  let h='<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;justify-content:space-between;font-size:12px;background:var(--vscode-titleBar-activeBackground)"><div style="display:flex;align-items:center;gap:6px"><button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">'+svgBack+t('tsk')+'</button><span style="color:var(--vscode-panel-border)">/</span><span style="font-weight:700;color:var(--vscode-textLink-foreground);font-family:monospace">'+aTk+'</span><span class="badge" style="background:rgba(139,92,246,.12);color:#a78bfa">'+{story:'Story',bug:'Bug',spike:'Spike'}[tk.type]+'</span><button class="bs" style="width:auto;padding:2px 8px;font-size:11px;' + (isDoneTk ? 'border-color:#10b981;color:#10b981' : '') + '" onclick="toggleTaskComplete(\'' + aTk + '\')">' + (isDoneTk ? svgCheck + ' ' + (L === 'es' ? 'Completada' : 'Completed') : (L === 'es' ? 'Marcar completada' : 'Mark done')) + '</button></div><div style="display:flex;align-items:center;gap:4px">';
   for(let i=1;i<=total;i++){if(i>1)h+='<div style="width:10px;height:1px;background:var(--vscode-panel-border)"></div>';h+='<div class="sd '+(i<cS?'sd-d':i===cS?'sd-a':'sd-p')+'"></div>'}
   h+='</div></div><div class="ctr fi" id="sC"></div>';
   document.getElementById('sTk').innerHTML=h;
@@ -1454,7 +1677,7 @@ function rSC(){
             '<div style="font-family:monospace;font-weight:600;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+s.name+'">'+s.name+'</div>'+
             '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px;font-size:10px;color:var(--vscode-descriptionForeground)">'+
               '<span>'+s.source+'</span>'+
-              '<span style="color:#10b981;font-weight:600">✓ Auto</span>'+
+              '<span style="color:#10b981;font-weight:600;display:inline-flex;align-items:center;gap:3px">'+svgCheck+' Auto</span>'+
             '</div>'+
           '</div>'+
         '</div>').join('')+
@@ -1491,7 +1714,7 @@ function rSC(){
     '<div class="card card-bg">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
         '<div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin:0">'+t('evid')+' ('+ssList.length+')</div>'+
-        '<span style="font-size:11px;color:#10b981;font-weight:600">✓ '+(L==='es'?'Adjuntadas por tests automáticos':'Attached by automated tests')+'</span>'+
+        '<span style="font-size:11px;color:#10b981;font-weight:600;display:inline-flex;align-items:center;gap:3px">'+svgCheck+' '+(L==='es'?'Adjuntadas por tests automáticos':'Attached by automated tests')+'</span>'+
       '</div>'+
       '<div id="evL">'+
         ssList.map((s,idx)=>'<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;background:var(--vscode-input-background);border:1px solid var(--vscode-panel-border);margin-bottom:6px">'+
@@ -1502,7 +1725,7 @@ function rSC(){
             '<div style="font-family:monospace;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+s.name+'">'+s.name+'</div>'+
             '<div style="display:flex;gap:6px;align-items:center;margin-top:2px">'+
               '<span class="badge" style="background:rgba(59,130,246,.12);color:#60a5fa">'+(s.source||'Playwright E2E')+'</span>'+
-              '<span style="font-size:10px;color:#10b981;font-weight:600">✓ '+(L==='es'?'Auto-captura':'Auto-capture')+'</span>'+
+              '<span style="font-size:10px;color:#10b981;font-weight:600;display:inline-flex;align-items:center;gap:3px">'+svgCheck+' '+(L==='es'?'Auto-captura':'Auto-capture')+'</span>'+
             '</div>'+
           '</div>'+
           '<button class="del-btn" onclick="removeScreenshot('+idx+')" title="'+t('delTask')+'">'+svgDel+'</button>'+
@@ -1543,6 +1766,11 @@ function rSC(){
 
 function sDone(msg){
   const tk=tasks[aTk];
+  if(tk){
+    tk.status = { es: 'Completado', en: 'Completed' };
+    tk.color = 'green';
+    saveTasks();
+  }
   document.getElementById('sC').innerHTML='<div style="text-align:center;padding:24px 0" class="fi"><div style="width:48px;height:48px;border-radius:50%;background:rgba(16,185,129,.1);display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></div><h2 style="font-size:16px;font-weight:700;margin-bottom:6px">'+t('tDone')+'</h2><p style="font-size:13px;color:var(--vscode-descriptionForeground);margin-bottom:4px">'+aTk+' · '+(tk.title[L]||tk.title.es||tk.title.en||tk.title)+'</p><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:18px">'+msg+'</p><button class="bs" style="width:auto;display:inline-flex;padding:8px 20px" onclick="showScr(\'home\')">'+t('nxtT')+'</button></div>';
 }
 function buildTicketPrompt(tk, id){
@@ -2128,6 +2356,25 @@ window.addEventListener('message',e=>{
     delete tasks[e.data.ticketId];
     saveTasks();
     toast((L==='es'?'Tarea eliminada: ':'Task deleted: ')+e.data.ticketId);
+    showScr('home');
+  }
+  if(e.data.type==='deleteEpicConfirmed'){
+    const delEid = e.data.epicId;
+    delete epics[delEid];
+    Object.keys(tasks).forEach(tid => {
+      if(tasks[tid].epicId === delEid){
+        tasks[tid].epicId = '';
+      }
+    });
+    Object.keys(milestones).forEach(mid => {
+      if(milestones[mid].epicIds){
+        milestones[mid].epicIds = milestones[mid].epicIds.filter(id => id !== delEid);
+      }
+    });
+    saveEpics();
+    saveTasks();
+    if(selectedEpicId === delEid) selectedEpicId = null;
+    toast((L==='es'?'Epica eliminada: ':'Epic deleted: ')+delEid);
     showScr('home');
   }
   if(e.data.type==='evidenceSelected'&&e.data.fileNames){

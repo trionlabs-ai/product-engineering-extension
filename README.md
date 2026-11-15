@@ -4,8 +4,13 @@ A simplified, guided workspace for Product Engineers, PMs, designers, QA, and an
 
 Product Studio turns VS Code into an accessible development studio: pick a Jira ticket, work with your connected AI assistant (Claude, GitHub Copilot, Antigravity, Ollama, Continue), test changes, launch local databases in 1 click via Docker, add rich evidence, and submit merge requests — without needing deep software engineering knowledge.
 
+![Product Studio Flow](./media/demo.gif)
+
 ## Features
 
+- **Epics & Tasks Drill-Down Navigation** — 2-level flow: browse project Epics with live completion progress, click into any Epic to view its tasks, and jump directly into the step-by-step ticket workspace.
+- **Full Epics CRUD** — create, view, edit, and delete Epics with native confirmation modals; automatically unassigns tasks safely without data loss.
+- **Task Completion Workflow & Direct Toggle** — mark tasks as completed in 1 click directly from the list or complete them automatically upon submitting merge requests.
 - **Guided Onboarding with Beginner Tips** — friendly "¿No sabes por dónde empezar?" tips, 1-click Starter Stack recommendation, and plain-language tool explanations.
 - **AI Assistant Hub & Topbar Indicator** — live status indicator on top for your connected AI (Claude, GitHub Copilot, Antigravity, Continue, Ollama, ChatGPT) with 1-click chat invocation.
 - **Docker & Local Environment Manager** — launch local databases (PostgreSQL, MySQL, Redis, docker-compose) with 1 click; automated Docker detection & 1-click Homebrew installer.

@@ -2,6 +2,24 @@
 
 All notable changes to Product Studio are documented here.
 
+## [1.9.0] - 2026-11-14
+
+### Added
+- **Full Epics CRUD**:
+  - **Create Epic**: `+ Nueva Épica` button opens clean creation screen with Name, Short Key, Goal / Summary, Owner/Lead, Target Milestone, and 7-color palette selection.
+  - **Read & Navigate**: Persistent Level 1 overview of all Epics with live progress and Level 2 Epic tasks drill-down.
+  - **Update Epic**: Edit button on each Epic card and within the Epic detail view, pre-populating fields for immediate modifications.
+  - **Delete Epic with Confirmation**: Delete action with native modal warning dialog; safely unassigns tasks (`epicId = ''`) so tasks are never lost.
+  - **Persistence**: Changes saved automatically to VS Code global state via `saveEpics` and restored across reloads.
+- **Task Completion Workflow & Direct Toggle**:
+  - Tasks now mark properly as `Completado` (Completed) when finishing Step 5 (or Step 4 on Spike) and persist in storage.
+  - Interactive circular check button on each task card for 1-click completion toggle (`Completado` <-> `En curso`) with dynamic Epic progress recalculation.
+  - In-ticket header status action allowing developers to mark as complete or reopen directly.
+- **Modern & Softer Blue Button Styling**:
+  - Redesigned `.bp` primary buttons with a modern, softer gradient (`#3b82f6` to `#2563eb`), subtle white border, and soft elevation box shadow.
+  - Elevated hover transitions with subtle glow and micro-transform.
+  - Soft secondary buttons (`.bs`) and refined task badges.
+
 ## [1.8.2] - 2026-11-14
 
 ### Added
@@ -49,7 +67,7 @@ All notable changes to Product Studio are documented here.
 - **Direct Assistant Command Dispatch**: Targeted invocation of provider commands (`claude-vscode.sidebar.open`, `workbench.panel.chat.view.copilot.focus`, `ollama-chat.ollamaChat`).
 - **Onboarding Beginner Guidance**: Friendly "¿No sabes por dónde empezar?" banner with 1-click Starter Stack selector (AI + Jira + Repo + Figma).
 - **Plain-Language Tool Tips**: Expandable tooltips and card descriptions explaining every tool in simple terms for non-technical users.
-- **AI Category in Onboarding**: Dedicated AI Assistants category (`cAI`) with auto-detection badges (`✓ VS`).
+- **AI Category in Onboarding**: Dedicated AI Assistants category (`cAI`) with auto-detection badges (` VS`).
 
 ## [1.6.0] - 2026-11-14
 
