@@ -1,40 +1,87 @@
-/**
- * Git command construction for Product Studio.
- *
- * Two behaviors are intentionally unchanged so a later change can fix them
- * in this module only:
- *
- * 1. Command injection. buildLocalCommitCommand() interpolates the commit
- *    message into a double-quoted shell string. The quote replace is a no-op
- *    (`\"` inside a template literal is just `"`), so a title containing
- *    quotes or shell metacharacters can change the command that runs.
- * 2. Identity overwrite. Init and commit commands run `git config user.name`
- *    and `git config user.email`, which rewrites the repository-local Git
- *    identity on every init and every local commit.
- */
+const TICKET_ID = /^[A-Za-z][A-Za-z0-9]{0,15}-\d{1,6}$/;
 
-const commands = {
-  isInsideWorkTree: 'git rev-parse --is-inside-work-tree',
-  currentBranch: 'git branch --show-current',
-  statusPorcelain: 'git status --porcelain',
-  revListCountHead: 'git rev-list --count HEAD',
-  shortHead: 'git rev-parse --short HEAD',
-};
+function isTicketId(id) {
+  return typeof id === 'string' && TICKET_ID.test(id);
+}
+
+function isCommitTitle(title) {
+  return (
+    typeof title === 'string' && title.length > 0 && title.length <= 2000 && !title.includes('\0')
+  );
+}
+
+function isIdentityValue(value) {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= 200 &&
+    !value.includes('\0') &&
+    !value.includes('\n') &&
+    !value.includes('\r') &&
+    !value.startsWith('-')
+  );
+}
+
+function isEmail(value) {
+  return isIdentityValue(value) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function slugify(title) {
+  const base = String(title || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return base || 'task';
+}
+
+function ticketBranchName(ticketId, title) {
+  return `feat/${ticketId}-${slugify(title)}`;
+}
 
 function formatCommitMessage(ticketId, title) {
   const taskTitle = title || 'complete task';
   return `feat(${ticketId}): ${taskTitle}`;
 }
 
-function buildInitRepositoryCommand() {
-  return 'git init && git config user.name "Product Engineer" && git config user.email "engineer@local" && git add -A && git commit -m "chore: initial commit"';
+function commitArgs(message) {
+  return ['commit', '-m', message];
 }
 
-function buildLocalCommitCommand(commitMsgText) {
-  // Preserves the previous no-op quote "escape": `\"` in a single-quoted
-  // string is just `"`, so quotes in the title stay inside the shell string.
-  const escaped = commitMsgText.replace(/"/g, '"');
-  return `git config user.name "Product Engineer" && git config user.email "engineer@local" && git add -A && git commit -m "${escaped}"`;
+function addAllArgs() {
+  return ['add', '-A'];
+}
+
+function pushArgs(remote, branch) {
+  return ['push', '--set-upstream', remote, branch];
+}
+
+function parseStatusPaths(stdout) {
+  return String(stdout || '')
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const body = line.slice(3);
+      const parts = body.split(' -> ');
+      return parts[parts.length - 1];
+    });
+}
+
+function formatFileList(files) {
+  const shown = files.slice(0, 12);
+  const extra = files.length - shown.length;
+  return shown.join('\n') + (extra > 0 ? `\n+${extra}` : '');
+}
+
+function clip(text) {
+  const value = String(text || '')
+    .replace(/\0/g, '')
+    .trim();
+  if (!value) return 'unknown git error';
+  if (value.length <= 500) return value;
+  return value.slice(0, 500) + '...';
 }
 
 function emptyGitStatus(rootPath) {
@@ -51,7 +98,7 @@ function interpretGitProbe(rootPath, probe) {
   if (!rootPath) return emptyGitStatus(null);
   if (!probe || !probe.inside) return emptyGitStatus(rootPath);
 
-  const branchStdout = probe.branchStdout;
+  const branchStdout = probe.branchStdout || '';
   const branch = probe.branchErr || !branchStdout.trim() ? 'main' : branchStdout.trim();
   const statusStdout = probe.statusStdout;
   const hasChanges = !probe.statusErr && !!statusStdout && statusStdout.trim().length > 0;
@@ -66,44 +113,68 @@ function interpretGitProbe(rootPath, probe) {
   };
 }
 
-function getLocalGitStatus(exec, cwd) {
-  return new Promise((resolve) => {
-    if (!cwd) {
-      resolve(interpretGitProbe(null, {}));
-      return;
-    }
-    exec(commands.isInsideWorkTree, { cwd }, (err, stdout) => {
-      if (err || !stdout || !stdout.trim().includes('true')) {
-        resolve(interpretGitProbe(cwd, { inside: false }));
-        return;
-      }
-      exec(commands.currentBranch, { cwd }, (branchErr, branchStdout) => {
-        exec(commands.statusPorcelain, { cwd }, (statusErr, statusStdout) => {
-          exec(commands.revListCountHead, { cwd }, (countErr, countStdout) => {
-            resolve(
-              interpretGitProbe(cwd, {
-                inside: true,
-                branchErr,
-                branchStdout,
-                statusErr,
-                statusStdout,
-                countErr,
-                countStdout,
-              })
-            );
-          });
-        });
-      });
-    });
+async function getLocalGitStatus(runFile, cwd) {
+  if (!cwd) return interpretGitProbe(null, {});
+  const run = (args) => runFile('git', args, { cwd });
+  const inside = await run(['rev-parse', '--is-inside-work-tree']);
+  if (!inside.ok || !inside.stdout.trim().includes('true')) {
+    return interpretGitProbe(cwd, { inside: false });
+  }
+  const branch = await run(['branch', '--show-current']);
+  const status = await run(['status', '--porcelain']);
+  const count = await run(['rev-list', '--count', 'HEAD']);
+  return interpretGitProbe(cwd, {
+    inside: true,
+    branchErr: branch.ok ? null : branch.error || new Error('branch'),
+    branchStdout: branch.stdout,
+    statusErr: status.ok ? null : status.error || new Error('status'),
+    statusStdout: status.stdout,
+    countErr: count.ok ? null : count.error || new Error('count'),
+    countStdout: count.stdout,
   });
 }
 
+async function readIdentity(runFile, cwd) {
+  const name = await runFile('git', ['config', '--get', 'user.name'], { cwd });
+  const email = await runFile('git', ['config', '--get', 'user.email'], { cwd });
+  return {
+    name: name.ok ? name.stdout.trim() : '',
+    email: email.ok ? email.stdout.trim() : '',
+  };
+}
+
+async function detectDefaultBranch(run) {
+  const originHead = await run(['symbolic-ref', '--short', 'refs/remotes/origin/HEAD']);
+  if (originHead.ok) {
+    const name = originHead.stdout.trim().replace(/^origin\//, '');
+    if (name) return name;
+  }
+  for (const candidate of ['main', 'master']) {
+    const exists = await run(['show-ref', '--verify', '--quiet', `refs/heads/${candidate}`]);
+    if (exists.ok) return candidate;
+  }
+  const current = await run(['branch', '--show-current']);
+  const name = current.ok ? current.stdout.trim() : '';
+  return name || 'main';
+}
+
 module.exports = {
-  commands,
+  isTicketId,
+  isCommitTitle,
+  isIdentityValue,
+  isEmail,
+  slugify,
+  ticketBranchName,
   formatCommitMessage,
-  buildInitRepositoryCommand,
-  buildLocalCommitCommand,
+  commitArgs,
+  addAllArgs,
+  pushArgs,
+  parseStatusPaths,
+  formatFileList,
+  clip,
   emptyGitStatus,
   interpretGitProbe,
   getLocalGitStatus,
+  readIdentity,
+  detectDefaultBranch,
 };

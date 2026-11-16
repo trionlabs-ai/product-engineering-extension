@@ -36,19 +36,30 @@ function createContext(overrides = {}) {
     },
     showWarningMessage(message) {
       ctx.warnings.push(message);
+      if (Array.isArray(overrides.warningResponses) && overrides.warningResponses.length) {
+        return Promise.resolve(overrides.warningResponses.shift());
+      }
       return Promise.resolve(overrides.warningResponse);
     },
     showErrorMessage(message) {
       ctx.errors.push(message);
     },
-    exec(cmd, options, callback) {
-      if (typeof options === 'function') {
-        callback = options;
-        options = undefined;
+    invocations: [],
+    inputs: [],
+    runFile(file, args, options) {
+      const invocation = { file, args: args.slice(), options };
+      ctx.invocations.push(invocation);
+      const result = overrides.runResult
+        ? overrides.runResult(file, args, options)
+        : { ok: true, stdout: '', stderr: '' };
+      return Promise.resolve(result);
+    },
+    showInputBox(options) {
+      ctx.inputs.push(options);
+      if (Array.isArray(overrides.inputResponses) && overrides.inputResponses.length) {
+        return Promise.resolve(overrides.inputResponses.shift());
       }
-      ctx.execs.push({ cmd, options });
-      const result = overrides.execResult ? overrides.execResult(cmd) : {};
-      if (callback) callback(result.err || null, result.stdout || '', result.stderr || '');
+      return Promise.resolve(overrides.inputResponse);
     },
     getWorkspaceRoot() {
       return Object.prototype.hasOwnProperty.call(overrides, 'root') ? overrides.root : '/repo';

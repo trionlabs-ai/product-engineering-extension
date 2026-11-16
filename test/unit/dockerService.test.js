@@ -2,20 +2,58 @@ const assert = require('assert');
 const test = require('node:test');
 const docker = require('../../src/host/dockerService');
 
-test('launch commands keep the previous container names and ports', () => {
-  assert.match(docker.buildLaunchCommand('postgres'), /--name ps-postgres/);
-  assert.match(docker.buildLaunchCommand('postgres'), /-p 5432:5432/);
-  assert.match(docker.buildLaunchCommand('mysql'), /--name ps-mysql/);
-  assert.match(docker.buildLaunchCommand('mysql'), /-p 3306:3306/);
-  assert.match(docker.buildLaunchCommand('redis'), /--name ps-redis/);
-  assert.match(docker.buildLaunchCommand('redis'), /-p 6379:6379/);
-  assert.strictEqual(docker.buildLaunchCommand('compose'), 'docker compose up -d');
-  assert.strictEqual(docker.buildLaunchCommand('other'), '');
+const hostileId = 'abc"; $(whoami) `id` ; rm -rf / && echo';
+
+test('launch specs are argument arrays with the previous image names and ports', () => {
+  assert.deepStrictEqual(docker.LAUNCH_ARGS.postgres.run.slice(-3), [
+    '-p',
+    '5432:5432',
+    'postgres:alpine',
+  ]);
+  assert.ok(docker.LAUNCH_ARGS.postgres.run.includes('--name'));
+  assert.ok(docker.LAUNCH_ARGS.postgres.run.includes('ps-postgres'));
+  assert.deepStrictEqual(docker.LAUNCH_ARGS.mysql.run.slice(-3), [
+    '-p',
+    '3306:3306',
+    'mysql:latest',
+  ]);
+  assert.ok(docker.LAUNCH_ARGS.mysql.run.includes('mysql:latest'));
+  assert.deepStrictEqual(docker.LAUNCH_ARGS.redis.run.slice(-3), [
+    '-p',
+    '6379:6379',
+    'redis:alpine',
+  ]);
+  assert.ok(docker.LAUNCH_ARGS.redis.run.includes('redis:alpine'));
+  assert.deepStrictEqual(docker.LAUNCH_ARGS.compose.run, ['compose', 'up', '-d']);
+  assert.strictEqual(docker.launchSpec('other'), null);
 });
 
-test('stop command interpolates the container id', () => {
-  assert.strictEqual(docker.buildStopCommand('abc123'), 'docker stop abc123');
+test('stop args keep a valid id literal and reject shell fragments', () => {
+  const id = '0123456789abcdef';
+  assert.deepStrictEqual(docker.stopArgs(id), ['stop', id]);
+  assert.strictEqual(docker.isContainerId(id), true);
+  assert.strictEqual(docker.isContainerId(hostileId), false);
+  assert.strictEqual(docker.isContainerId('abc'), false);
+  assert.strictEqual(docker.isContainerId('0123456789abcdef\n'), false);
 });
+
+test('launch falls back to docker start without a shell', async () => {
+  const calls = [];
+  const runFile = (file, args) => {
+    calls.push({ file, args });
+    if (args[0] === 'run') return Promise.resolve({ ok: false, stdout: '', stderr: 'name in use' });
+    return Promise.resolve({ ok: true, stdout: idSafe(args), stderr: '' });
+  };
+  const result = await docker.launchService(runFile, 'postgres');
+  assert.strictEqual(result.ok, true);
+  assert.deepStrictEqual(calls[0].args, docker.LAUNCH_ARGS.postgres.run);
+  assert.deepStrictEqual(calls[1].args, ['start', 'ps-postgres']);
+  assert.strictEqual(calls[0].file, 'docker');
+});
+
+function idSafe(args) {
+  return args.join('\0');
+}
 
 test('parseDockerPs splits the format columns and ignores empty output', () => {
   assert.deepStrictEqual(docker.parseDockerPs(''), []);
@@ -42,21 +80,24 @@ test('install lines stay platform specific', () => {
 
 test('getDockerStatus stops after a missing docker binary', async () => {
   const calls = [];
-  const exec = (cmd, cb) => {
-    calls.push(cmd);
-    cb(new Error('not found'), '');
+  const runFile = (file, args) => {
+    calls.push(args);
+    assert.strictEqual(file, 'docker');
+    return Promise.resolve({ ok: false, stdout: '', stderr: 'not found' });
   };
-  const status = await docker.getDockerStatus(exec);
+  const status = await docker.getDockerStatus(runFile);
   assert.deepStrictEqual(status, { installed: false, running: false, version: '' });
-  assert.deepStrictEqual(calls, [docker.commands.version]);
+  assert.deepStrictEqual(calls, [['--version']]);
 });
 
 test('getDockerStatus reports a stopped daemon', async () => {
-  const exec = (cmd, cb) => {
-    if (cmd === docker.commands.version) cb(null, 'Docker version 27.0.0\n');
-    else cb(new Error('cannot connect'));
+  const runFile = (file, args) => {
+    if (args[0] === '--version') {
+      return Promise.resolve({ ok: true, stdout: 'Docker version 27.0.0\n', stderr: '' });
+    }
+    return Promise.resolve({ ok: false, stdout: '', stderr: 'cannot connect' });
   };
-  const status = await docker.getDockerStatus(exec);
+  const status = await docker.getDockerStatus(runFile);
   assert.deepStrictEqual(status, {
     installed: true,
     running: false,
@@ -64,12 +105,31 @@ test('getDockerStatus reports a stopped daemon', async () => {
   });
 });
 
-test('getDockerContainers parses ps output', async () => {
-  const exec = (cmd, cb) => {
-    assert.strictEqual(cmd, docker.commands.ps);
-    cb(null, 'id1|name|image|Up|80/tcp\n');
+test('getDockerContainers parses ps output from an argument array', async () => {
+  const runFile = (file, args) => {
+    assert.deepStrictEqual(args.slice(0, 3), ['ps', '-a', '--format']);
+    return Promise.resolve({
+      ok: true,
+      stdout: '0123456789ab|name|image|Up|80/tcp\n',
+      stderr: '',
+    });
   };
-  const list = await docker.getDockerContainers(exec);
-  assert.strictEqual(list[0].name, 'name');
+  const list = await docker.getDockerContainers(runFile);
+  assert.strictEqual(list[0].id, '0123456789ab');
   assert.strictEqual(list[0].status, 'Up');
+});
+
+test('stopContainer refuses a hostile id and passes a hex id literally', async () => {
+  const calls = [];
+  const runFile = (file, args) => {
+    calls.push({ file, args });
+    return Promise.resolve({ ok: true, stdout: '', stderr: '' });
+  };
+  const rejected = await docker.stopContainer(runFile, hostileId);
+  assert.strictEqual(rejected.reason, 'invalid');
+  assert.strictEqual(calls.length, 0);
+  const id = '0123456789abcdef';
+  const stopped = await docker.stopContainer(runFile, id);
+  assert.strictEqual(stopped.ok, true);
+  assert.deepStrictEqual(calls[0], { file: 'docker', args: ['stop', id] });
 });

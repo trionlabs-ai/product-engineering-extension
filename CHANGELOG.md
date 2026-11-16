@@ -6,6 +6,7 @@ All notable changes to Product Studio are documented here.
 
 ### Changed
 - **Internal structure only.** Split the extension host and webview into modules, load webview assets with a nonce Content Security Policy, and add ESLint plus unit and smoke tests. Commands, settings, copy, and flows are unchanged.
+- **Real Git commits.** Opening a ticket creates or switches to `feat/<ticket>-<slug>`. Uncommitted work is committed or stashed only after you choose; nothing is discarded. The commit step lists the files, then commits `feat(<ticket>): <title>` with your existing Git identity. If no identity is set, Product Studio explains how to set it and can save a name and email for this repository only after you type them. A remote is pushed with upstream; there is no force-push, no fake hash, and no commit when a folder or repository is missing.
 
 ## [1.9.5] - 2026-11-15
 

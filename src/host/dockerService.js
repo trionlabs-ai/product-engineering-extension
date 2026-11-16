@@ -1,10 +1,43 @@
-const commands = {
-  version: 'docker --version',
-  info: 'docker info',
-  ps: 'docker ps -a --format "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}"',
+const LAUNCH_ARGS = {
+  postgres: {
+    run: [
+      'run',
+      '-d',
+      '--name',
+      'ps-postgres',
+      '-e',
+      'POSTGRES_PASSWORD=postgres',
+      '-p',
+      '5432:5432',
+      'postgres:alpine',
+    ],
+    start: ['start', 'ps-postgres'],
+  },
+  mysql: {
+    run: [
+      'run',
+      '-d',
+      '--name',
+      'ps-mysql',
+      '-e',
+      'MYSQL_ROOT_PASSWORD=mysql',
+      '-p',
+      '3306:3306',
+      'mysql:latest',
+    ],
+    start: ['start', 'ps-mysql'],
+  },
+  redis: {
+    run: ['run', '-d', '--name', 'ps-redis', '-p', '6379:6379', 'redis:alpine'],
+    start: ['start', 'ps-redis'],
+  },
+  compose: {
+    run: ['compose', 'up', '-d'],
+    start: null,
+  },
 };
 
-const OPEN_DOCKER_DESKTOP_COMMAND = 'open -a Docker';
+const OPEN_DOCKER_DESKTOP_ARGS = ['-a', 'Docker'];
 
 const DARWIN_INSTALL_LINES = [
   'echo "=== Instalando Docker en macOS ==="',
@@ -20,24 +53,16 @@ function dockerInstallLines(platform) {
   return platform === 'darwin' ? DARWIN_INSTALL_LINES.slice() : OTHER_INSTALL_LINES.slice();
 }
 
-function buildLaunchCommand(service) {
-  if (service === 'postgres') {
-    return 'docker run -d --name ps-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:alpine || docker start ps-postgres';
-  }
-  if (service === 'mysql') {
-    return 'docker run -d --name ps-mysql -e MYSQL_ROOT_PASSWORD=mysql -p 3306:3306 mysql:latest || docker start ps-mysql';
-  }
-  if (service === 'redis') {
-    return 'docker run -d --name ps-redis -p 6379:6379 redis:alpine || docker start ps-redis';
-  }
-  if (service === 'compose') {
-    return 'docker compose up -d';
-  }
-  return '';
+function isContainerId(id) {
+  return typeof id === 'string' && /^[a-f0-9]{12,64}$/.test(id);
 }
 
-function buildStopCommand(containerId) {
-  return `docker stop ${containerId}`;
+function stopArgs(containerId) {
+  return ['stop', containerId];
+}
+
+function launchSpec(service) {
+  return Object.prototype.hasOwnProperty.call(LAUNCH_ARGS, service) ? LAUNCH_ARGS[service] : null;
 }
 
 function parseDockerPs(stdout) {
@@ -49,46 +74,55 @@ function parseDockerPs(stdout) {
   });
 }
 
-function getDockerStatus(exec) {
-  return new Promise((resolve) => {
-    exec(commands.version, (err, stdout) => {
-      if (err || !stdout) {
-        resolve({ installed: false, running: false, version: '' });
-        return;
-      }
-      const version = stdout.trim();
-      exec(commands.info, (infoErr) => {
-        resolve({
-          installed: true,
-          running: !infoErr,
-          version,
-        });
-      });
-    });
-  });
+async function getDockerStatus(runFile) {
+  const version = await runFile('docker', ['--version']);
+  if (!version.ok || !version.stdout) {
+    return { installed: false, running: false, version: '' };
+  }
+  const info = await runFile('docker', ['info']);
+  return {
+    installed: true,
+    running: info.ok,
+    version: version.stdout.trim(),
+  };
 }
 
-function getDockerContainers(exec) {
-  return new Promise((resolve) => {
-    exec(commands.ps, (err, stdout) => {
-      if (err || !stdout) {
-        resolve([]);
-        return;
-      }
-      resolve(parseDockerPs(stdout));
-    });
-  });
+async function getDockerContainers(runFile) {
+  const result = await runFile('docker', [
+    'ps',
+    '-a',
+    '--format',
+    '{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}',
+  ]);
+  if (!result.ok || !result.stdout) return [];
+  return parseDockerPs(result.stdout);
+}
+
+async function launchService(runFile, service) {
+  const spec = launchSpec(service);
+  if (!spec) return null;
+  const started = await runFile('docker', spec.run);
+  if (started.ok || !spec.start) return started;
+  return runFile('docker', spec.start);
+}
+
+async function stopContainer(runFile, containerId) {
+  if (!isContainerId(containerId)) return { ok: false, reason: 'invalid' };
+  return runFile('docker', stopArgs(containerId));
 }
 
 module.exports = {
-  commands,
-  OPEN_DOCKER_DESKTOP_COMMAND,
+  LAUNCH_ARGS,
+  OPEN_DOCKER_DESKTOP_ARGS,
   DARWIN_INSTALL_LINES,
   OTHER_INSTALL_LINES,
   dockerInstallLines,
-  buildLaunchCommand,
-  buildStopCommand,
+  isContainerId,
+  stopArgs,
+  launchSpec,
   parseDockerPs,
   getDockerStatus,
   getDockerContainers,
+  launchService,
+  stopContainer,
 };
