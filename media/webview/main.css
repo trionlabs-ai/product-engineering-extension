@@ -1,0 +1,94 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--vscode-editor-background);color:var(--vscode-foreground);height:100vh;overflow:hidden;display:flex;flex-direction:column}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(120,120,120,.25);border-radius:3px}
+*{transition:all .12s ease}
+.topbar{background:var(--vscode-titleBar-activeBackground);border-bottom:1px solid var(--vscode-panel-border);padding:6px 14px;display:flex;align-items:center;justify-content:space-between;font-size:12px;flex-shrink:0}
+.topbar button{background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:4px;padding:2px 4px;border-radius:4px}
+.topbar button:hover{color:var(--vscode-foreground);background:var(--vscode-toolbar-hoverBackground)}
+.main{flex:1;overflow-y:auto;overflow-x:hidden}
+.ctr{max-width:640px;margin:0 auto;padding:24px;width:100%}
+#sOb .ctr{max-width:720px}
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(195px, 1fr));gap:8px;margin-bottom:8px}
+.cat-pills{display:flex;gap:4px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
+.cat-pill{padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid var(--vscode-panel-border);background:transparent;color:var(--vscode-descriptionForeground);white-space:nowrap}
+.cat-pill.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border-color:var(--vscode-button-background)}
+.md-toolbar{display:flex;gap:4px;padding:4px 8px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-bottom:none;border-radius:6px 6px 0 0;font-size:11px;align-items:center}
+.md-toolbar button{background:none;border:none;cursor:pointer;padding:3px 6px;border-radius:4px;color:var(--vscode-descriptionForeground);font-weight:600;font-size:11px}
+.md-toolbar button:hover{background:var(--vscode-toolbar-hoverBackground);color:var(--vscode-foreground)}
+.md-editor{border-radius:0 0 6px 6px !important}
+.md-preview{background:var(--vscode-input-background);border:1px solid var(--vscode-input-border);border-radius:0 0 6px 6px;padding:10px;font-size:12px;line-height:1.5;max-height:160px;overflow-y:auto}
+.md-preview h3{font-size:13px;font-weight:700;margin:6px 0 3px}
+.md-preview h4{font-size:12px;font-weight:700;margin:5px 0 2px}
+.md-preview ul{padding-left:16px;margin:3px 0}
+#sOb{height:100%;min-height:100%;display:flex}
+#sOb .ctr{height:100%;min-height:100%;display:flex;flex-direction:column;justify-content:center}
+#sOb .ctr>*{flex-shrink:0}
+#sOb #cList{flex:1 1 auto;min-height:160px;max-height:360px;overflow-y:auto}
+.card{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:14px;margin-bottom:12px}
+.card-bg{background:var(--vscode-sideBar-background)}
+.bp{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:4px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
+.bp:hover{background:var(--vscode-button-hoverBackground)}
+.bs{background:transparent;border:1px solid var(--vscode-panel-border);border-radius:4px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;width:100%;color:var(--vscode-foreground);display:flex;align-items:center;justify-content:center;gap:6px}
+.bs:hover{background:var(--vscode-toolbar-hoverBackground);border-color:var(--vscode-focusBorder)}
+.task-check-circle{width:16px;height:16px;border-radius:3px;border:1px solid var(--vscode-panel-border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--vscode-button-foreground);padding:0;flex-shrink:0}
+.task-check-circle:hover{border-color:var(--vscode-focusBorder)}
+.task-check-circle.checked{background:var(--vscode-button-background);border-color:var(--vscode-button-background)}
+.task-check-circle.checked svg{width:11px;height:11px}
+.bg{background:#e24329;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
+.bg:hover{background:#c0341d}
+.inp{width:100%;background:var(--vscode-input-background);border:1px solid var(--vscode-input-border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--vscode-input-foreground);outline:none}
+.inp:focus{border-color:var(--vscode-focusBorder)}
+select.inp{cursor:pointer}
+.lbl{font-size:11px;font-weight:600;color:var(--vscode-descriptionForeground);margin-bottom:4px;display:block}
+.cat-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--vscode-descriptionForeground);margin:10px 0 4px}
+.cc{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.cc:hover{border-color:var(--vscode-descriptionForeground)}
+.cc.sel{border-color:var(--vscode-focusBorder);background:rgba(59,130,246,.08)}
+.cc.hid{display:none}
+.tr{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:14px;cursor:pointer;margin-bottom:8px;display:flex;align-items:start;justify-content:space-between}
+.tr:hover{background:rgba(59,130,246,.04)}
+.sd{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+.sd-a{background:var(--vscode-focusBorder);box-shadow:0 0 6px var(--vscode-focusBorder)}
+.sd-d{background:#10b981}
+.sd-p{background:var(--vscode-panel-border)}
+.pb{width:100%;text-align:left;padding:10px 14px;border-radius:8px;border:1px solid var(--vscode-panel-border);background:var(--vscode-sideBar-background);cursor:pointer;font-size:13px;color:var(--vscode-foreground);display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.pb:hover{border-color:var(--vscode-focusBorder)}
+.pb.fl{background:rgba(59,130,246,.1)}
+.tok{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;background:rgba(16,185,129,.08);color:#10b981;font-size:12px;margin-bottom:4px}
+.toast{position:fixed;bottom:12px;right:12px;background:var(--vscode-editorWidget-background);border:1px solid var(--vscode-panel-border);color:var(--vscode-foreground);padding:8px 14px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:6px;transform:translateY(60px);opacity:0;transition:all .2s;z-index:99;pointer-events:none}
+.toast.show{transform:translateY(0);opacity:1}
+.clip{position:fixed;top:50px;left:50%;transform:translateX(-50%) translateY(-10px);background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;opacity:0;transition:all .2s;z-index:99;pointer-events:none}
+.clip.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.fi{animation:fi .2s ease}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.badge{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
+.lt{display:flex;border:1px solid var(--vscode-panel-border);border-radius:6px;overflow:hidden;font-size:11px}
+.lt button{padding:3px 8px;border:none;cursor:pointer;font-weight:600;background:transparent;color:var(--vscode-descriptionForeground)}
+.lt button.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
+.del-btn{background:none;border:none;cursor:pointer;color:var(--vscode-descriptionForeground);padding:4px;border-radius:4px;display:flex;align-items:center}
+.del-btn:hover{background:rgba(239,68,68,.15);color:#ef4444}
+.crit-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.crit-row .inp{flex:1}
+.crit-row button{background:none;border:none;cursor:pointer;color:var(--vscode-descriptionForeground);padding:2px}
+.crit-row button:hover{color:#ef4444}
+.ext-badge{font-size:9px;background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);padding:2px 5px;border-radius:4px;font-weight:600;display:inline-flex;align-items:center;gap:3px}
+.task-card{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:12px 14px;margin-bottom:8px;background:var(--vscode-sideBar-background);cursor:pointer;transition:all .15s ease;display:flex;align-items:center;gap:12px}
+.task-card:hover{border-color:var(--vscode-focusBorder);background:rgba(255,255,255,.04);transform:translateY(-1px)}
+.task-card:active{transform:translateY(0)}
+.epic-card{border:1px solid var(--vscode-panel-border);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--vscode-sideBar-background);cursor:pointer;transition:all .15s ease}
+.epic-card:hover{border-color:var(--vscode-focusBorder);background:rgba(255,255,255,.04);transform:translateY(-1px)}
+.epic-card:active{transform:translateY(0)}
+.seg-tabs{display:flex;gap:4px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-radius:6px;padding:3px;font-size:12px}
+.seg-tab{padding:5px 12px;border-radius:5px;cursor:pointer;border:none;background:transparent;color:var(--vscode-descriptionForeground);font-weight:600;display:flex;align-items:center;gap:6px;font-size:12px;flex:1;justify-content:center}
+.seg-tab.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
+.seg-tab:hover:not(.active){color:var(--vscode-foreground);background:rgba(255,255,255,.04)}
+.epic-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+.epic-chip{font-size:11px;padding:4px 10px;border-radius:12px;border:1px solid var(--vscode-panel-border);background:var(--vscode-sideBar-background);color:var(--vscode-descriptionForeground);cursor:pointer;white-space:nowrap;font-weight:500}
+.epic-chip.active{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.4);color:#60a5fa;font-weight:600}
+.epic-chip:hover:not(.active){border-color:var(--vscode-descriptionForeground);color:var(--vscode-foreground)}
+.pbar{height:6px;background:var(--vscode-panel-border);border-radius:3px;overflow:hidden;margin-top:6px}
+.pbar-fill{height:100%;background:#10b981;border-radius:3px;transition:width .3s}
+.test-box{border:1px solid var(--vscode-panel-border);border-radius:6px;padding:8px 10px;margin-bottom:6px;background:var(--vscode-sideBar-background);display:flex;align-items:center;justify-content:space-between}
+.ss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:8px 0}
+.ss-card{border:1px solid var(--vscode-panel-border);border-radius:6px;overflow:hidden;background:var(--vscode-sideBar-background);font-size:11px}
+.ss-card:hover{border-color:var(--vscode-focusBorder)}

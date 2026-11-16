@@ -16,7 +16,7 @@ jobs:
           node-version: '20'
 
       - name: Syntax and lint check
-        run: node -c extension.js
+        run: node scripts/syntax-check.js
 
       - name: Package VSIX
         run: npx @vscode/vsce package --no-dependencies --allow-missing-repository
@@ -24,7 +24,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: "*.vsix"
+          files: '*.vsix'
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

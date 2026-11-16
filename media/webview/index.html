@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="___CSP___">
+<link rel="stylesheet" href="___CSS_URI___">
+</head>
+<body>
+
+
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:6px">
+    <strong>Product Studio</strong>
+    <span style="color:var(--vscode-descriptionForeground);font-size:11px" id="topLbl"></span>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px" id="topAct" ___TOP_ACT_ATTR___>
+    <div class="lt">
+      <button id="lEs" class="___LANG_ES_CLASS___" data-act="cLang" data-arg="es">ES</button>
+      <button id="lEn" class="___LANG_EN_CLASS___" data-act="cLang" data-arg="en">EN</button>
+    </div>
+    <button data-act="startOb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="bNP"></span></button>
+    <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
+    <button data-act="showScr" data-arg="env" title="Docker & Entorno local"><svg viewBox="0 0 24 24" width="13" height="13" fill="#2496ED"><path d="M13.98 11.08h1.83V9.25H13.98v1.83zm-2.4 0h1.83V9.25h-1.83v1.83zm-2.41 0H11V9.25H9.17v1.83zm-2.4 0h1.83V9.25H6.77v1.83zm-2.41 0h1.83V9.25H4.36v1.83zm4.81-2.34h1.83V6.91H9.17v1.83zm2.4 0h1.83V6.91h-1.83v1.83zm2.41 0h1.83V6.91h-1.83v1.83zm-4.81-2.33h1.83V4.58H9.17v1.83zm13.78 6.42c-.44-.31-1.42-.45-2.2-.18-.17-.74-.6-1.39-1.25-1.88l-.51-.38-.34.54c-.38.59-.51 1.34-.41 2.05-.62.33-1.63.38-2.18.38H1.67c-.37 0-.67.3-.67.67 0 2.22.86 4.3 2.42 5.86C5.07 23.8 7.39 24.5 12 24.5c6.53 0 10.9-3.9 11.95-10.42.06-.41.05-.98-.5-1.76l-.5-.33z"/></svg><span>Docker</span><span class="sd sd-p" id="envDot" style="width:6px;height:6px"></span></button>
+    <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
+    <span id="topLocalBadge" class="badge" style="background:var(--vscode-badge-background, rgba(255,255,255,.08));color:var(--vscode-badge-foreground, var(--vscode-foreground));border:1px solid var(--vscode-panel-border);font-size:10px;padding:2px 6px;___LOCAL_DISPLAY___">Local</span>
+    <button data-act="showScr" data-arg="ai" id="topAiBtn" title="Asistente de IA"><span id="topAiIcon"></span><span id="topAiName">___AI_NAME___</span><span class="sd sd-d" id="topAiDot" style="width:6px;height:6px;background:#10b981"></span></button>
+    <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
+    <button data-act="showScr" data-arg="settings"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span id="bRC"></span></button>
+  </div>
+</div>
+
+<div class="main">
+  <div id="sOb" ___SOB_ATTR___></div>
+  <div id="sHome" style="display:none"></div>
+  <div id="sTk" style="display:none"></div>
+  <div id="sSet" style="display:none"></div>
+  <div id="sCreate" style="display:none"></div>
+  <div id="sCreateEpic" style="display:none"></div>
+  <div id="sEnv" style="display:none"></div>
+  <div id="sAi" style="display:none"></div>
+</div>
+
+<div class="toast" id="toastEl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span id="toastTx"></span></div>
+<div class="clip" id="clipEl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span id="clipTx"></span></div>
+
+
+<script type="application/json" id="ps-bootstrap" nonce="___NONCE___">___BOOTSTRAP_JSON___</script>
+<script nonce="___NONCE___" src="___I18N_URI___"></script>
+<script nonce="___NONCE___" src="___JS_URI___"></script>
+</body>
+</html>

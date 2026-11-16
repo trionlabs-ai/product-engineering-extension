@@ -2,6 +2,11 @@
 
 All notable changes to Product Studio are documented here.
 
+## [Unreleased]
+
+### Changed
+- **Internal structure only.** Split the extension host and webview into modules, load webview assets with a nonce Content Security Policy, and add ESLint plus unit and smoke tests. Commands, settings, copy, and flows are unchanged.
+
 ## [1.9.5] - 2026-11-15
 
 ### Added
