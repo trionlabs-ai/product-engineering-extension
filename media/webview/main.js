@@ -1,625 +1,20 @@
-const vscode = require('vscode');
-const cp = require('child_process');
 
-// =====================================================================
-// PRODUCT STUDIO v1.7.0 — VS Code Extension
-// Guided workspace for Product Engineers: onboarding, task CRUD,
-// AI chat sync (Claude, Copilot, Gemini, Ollama), testing, evidence,
-// Docker & Local Env, rich Jira docs. i18n: ES / EN.
-// =====================================================================
+const vsc = acquireVsCodeApi();
+const bootstrap = JSON.parse(document.getElementById('ps-bootstrap').textContent);
+let L = bootstrap.lang;
+let onb = !!bootstrap.onboarded;
+let cTools = bootstrap.connectedTools || [];
+let detExts = bootstrap.detectedExts;
+let isLocalMode = !!bootstrap.localMode;
+let activeAi = bootstrap.activeAi || 'Claude';
+let D = bootstrap.i18n;
 
-function activate(context) {
-  console.log('Product Studio v1.7.0 activated');
-
-  let mainPanel = null;
-
-  function getLang() {
-    const pref = vscode.workspace.getConfiguration('productStudio').get('language', 'auto');
-    if (pref !== 'auto') return pref;
-    return (vscode.env.language || 'en').startsWith('es') ? 'es' : 'en';
-  }
-
-  function getState(key, fallback) { return context.globalState.get('ps.' + key, fallback); }
-  function setState(key, val) { context.globalState.update('ps.' + key, val); }
-
-  function getDetectedExts() {
-    return {
-      gitlab: !!vscode.extensions.getExtension('GitLab.gitlab-workflow'),
-      github: !!vscode.extensions.getExtension('GitHub.vscode-pull-request-github'),
-      jira: !!vscode.extensions.getExtension('Atlassian.atlascode'),
-      claude: !!vscode.extensions.getExtension('anthropic.claude-code') || !!vscode.extensions.getExtension('saoudrizwan.claude-dev'),
-      copilot: !!vscode.extensions.getExtension('github.copilot') || !!vscode.extensions.getExtension('github.copilot-chat'),
-      gemini: !!vscode.extensions.getExtension('googlecloudtools.cloudcode') || !!vscode.extensions.getExtension('google.gemini'),
-      continue: !!vscode.extensions.getExtension('Continue.continue'),
-      ollama: !!vscode.extensions.getExtension('ashishalex.ollama-chat')
-    };
-  }
-
-  function getActiveAi() {
-    const det = getDetectedExts();
-    let defaultAi = 'Claude';
-    if (det.claude) defaultAi = 'Claude';
-    else if (det.copilot) defaultAi = 'GitHub Copilot';
-    else if (det.gemini) defaultAi = 'Antigravity';
-    else if (det.continue) defaultAi = 'Continue';
-    else if (det.ollama) defaultAi = 'Ollama';
-    return getState('activeAi', defaultAi);
-  }
-
-  // Load stored tasks or use defaults
-  function getTasks() {
-    return getState('tasks', null);
-  }
-
-  // Load stored epics or use defaults
-  function getEpics() {
-    return getState('epics', null);
-  }
-
-  function getWorkspaceRoot() {
-    const folders = vscode.workspace.workspaceFolders;
-    return folders && folders.length > 0 ? folders[0].uri.fsPath : null;
-  }
-
-  function getLocalGitStatus() {
-    const cwd = getWorkspaceRoot();
-    return new Promise(resolve => {
-      if (!cwd) return resolve({ hasGit: false, branch: '', hasChanges: false, commits: 0, rootPath: null });
-      cp.exec('git rev-parse --is-inside-work-tree', { cwd }, (err, stdout) => {
-        if (err || !stdout || !stdout.trim().includes('true')) {
-          return resolve({ hasGit: false, branch: '', hasChanges: false, commits: 0, rootPath: cwd });
-        }
-        cp.exec('git branch --show-current', { cwd }, (bErr, bOut) => {
-          const branch = bErr || !bOut.trim() ? 'main' : bOut.trim();
-          cp.exec('git status --porcelain', { cwd }, (sErr, sOut) => {
-            const hasChanges = !sErr && !!sOut && sOut.trim().length > 0;
-            cp.exec('git rev-list --count HEAD', { cwd }, (cErr, cOut) => {
-              const commits = cErr ? 0 : parseInt((cOut || '').trim(), 10) || 0;
-              resolve({ hasGit: true, branch, hasChanges, commits, rootPath: cwd });
-            });
-          });
-        });
-      });
-    });
-  }
-
-  function getDockerStatus() {
-    return new Promise(resolve => {
-      cp.exec('docker --version', (err, stdout) => {
-        if (err || !stdout) {
-          return resolve({ installed: false, running: false, version: '' });
-        }
-        const version = stdout.trim();
-        cp.exec('docker info', infoErr => {
-          resolve({
-            installed: true,
-            running: !infoErr,
-            version
-          });
-        });
-      });
-    });
-  }
-
-  function getDockerContainers() {
-    return new Promise(resolve => {
-      cp.exec('docker ps -a --format "{{.ID}}|{{.Names}}|{{.Image}}|{{.Status}}|{{.Ports}}"', (err, stdout) => {
-        if (err || !stdout) return resolve([]);
-        const lines = stdout.trim().split('\n').filter(Boolean);
-        const list = lines.map(l => {
-          const [id, name, image, status, ports] = l.split('|');
-          return { id, name, image, status, ports };
-        });
-        resolve(list);
-      });
-    });
-  }
-
-  async function triggerAiChat(prompt, lang, provider) {
-    if (prompt) {
-      try {
-        await vscode.env.clipboard.writeText(prompt);
-      } catch (_) { }
-    }
-
-    const ai = provider || getActiveAi();
-    const pLower = ai.toLowerCase();
-    let chatCommands = [];
-
-    if (pLower.includes('claude')) {
-      chatCommands = [
-        { cmd: 'claude-vscode.sidebar.open' },
-        { cmd: 'claude-vscode.focus' },
-        { cmd: 'claude-vscode.newConversation' },
-        { cmd: 'claude-vscode.editor.open' },
-        { cmd: 'claude.focus' },
-        { cmd: 'claude.openChat' },
-        { cmd: 'claude-dev.SidebarProvider.focus' }
-      ];
-    } else if (pLower.includes('copilot')) {
-      chatCommands = [
-        { cmd: 'workbench.panel.chat.view.copilot.focus' },
-        { cmd: 'github.copilot.chat.focus' },
-        { cmd: 'workbench.action.chat.open', args: prompt ? { query: prompt } : undefined },
-        { cmd: 'workbench.action.quickchat.open', args: prompt ? { query: prompt } : undefined }
-      ];
-    } else if (pLower.includes('antigravity') || pLower.includes('gemini')) {
-      chatCommands = [
-        { cmd: 'antigravity.chat.focus' },
-        { cmd: 'antigravity.openChat' },
-        { cmd: 'google.gemini.chat.focus' },
-        { cmd: 'cloudcode.gemini.focus' }
-      ];
-    } else if (pLower.includes('continue')) {
-      chatCommands = [
-        { cmd: 'continue.focusContinueInputView' },
-        { cmd: 'continue.continueGUIView.focus' }
-      ];
-    } else if (pLower.includes('ollama')) {
-      chatCommands = [
-        { cmd: 'ollama-chat.ollamaChat' },
-        { cmd: 'workbench.view.extension.ollama' }
-      ];
-    }
-
-    // Generic VS Code chat fallbacks
-    chatCommands.push(
-      { cmd: 'workbench.action.chat.open', args: prompt ? { query: prompt } : undefined },
-      { cmd: 'workbench.action.quickchat.open', args: prompt ? { query: prompt } : undefined },
-      { cmd: 'claude-vscode.sidebar.open' },
-      { cmd: 'workbench.panel.chat.view.copilot.focus' }
-    );
-
-    let opened = false;
-    for (const item of chatCommands) {
-      try {
-        if (item.args) {
-          await vscode.commands.executeCommand(item.cmd, item.args);
-        } else {
-          await vscode.commands.executeCommand(item.cmd);
-        }
-        opened = true;
-        break;
-      } catch (_) { }
-    }
-
-    const msg = lang === 'es'
-      ? (opened
-        ? `Chat de ${ai} abierto y prompt copiado. Pega con Cmd+V / Ctrl+V.`
-        : `Prompt copiado. Abre el chat de ${ai} y pega con Cmd+V / Ctrl+V.`)
-      : (opened
-        ? `${ai} chat opened & prompt copied. Paste with Cmd+V / Ctrl+V.`
-        : `Prompt copied. Open ${ai} chat and paste with Cmd+V / Ctrl+V.`);
-
-    vscode.window.showInformationMessage(msg);
-  }
-
-  function openMain(ticketId) {
-    vscode.commands.executeCommand('workbench.action.closeSidebar');
-    if (mainPanel) {
-      mainPanel.reveal(vscode.ViewColumn.One);
-      if (ticketId) mainPanel.webview.postMessage({ type: 'openTicket', ticketId });
-      return;
-    }
-    mainPanel = vscode.window.createWebviewPanel(
-      'productStudio.main', 'Product Studio', vscode.ViewColumn.One,
-      { enableScripts: true, retainContextWhenHidden: true }
-    );
-    mainPanel.webview.html = getMainHtml(
-      getLang(),
-      getState('onboarded', false),
-      getState('connectedTools', []),
-      getTasks(),
-      ticketId,
-      getDetectedExts(),
-      getActiveAi(),
-      getEpics(),
-      getState('localMode', false)
-    );
-
-    mainPanel.webview.onDidReceiveMessage(async msg => {
-      const lang = getLang();
-      switch (msg.type) {
-        case 'finishOnboarding':
-          setState('onboarded', true);
-          setState('connectedTools', msg.tools || []);
-          setState('localMode', !!msg.localMode);
-          if (msg.activeAi) {
-            setState('activeAi', msg.activeAi);
-          } else {
-            const aiChoice = (msg.tools || []).find(t => ['Claude', 'GitHub Copilot', 'Antigravity', 'Continue', 'Ollama', 'ChatGPT'].includes(t));
-            if (aiChoice) setState('activeAi', aiChoice);
-          }
-          const finMsg = msg.localMode
-            ? (lang === 'es' ? 'Product Studio: Modo local configurado. Sin dependencia de Jira ni repos remotos.' : 'Product Studio: Local mode configured. No Jira or remote repo required.')
-            : (lang === 'es' ? 'Product Studio: Proyecto configurado.' : 'Product Studio: Project configured.');
-          vscode.window.showInformationMessage(finMsg);
-          break;
-        case 'checkLocalGit':
-          const gitStat = await getLocalGitStatus();
-          mainPanel.webview.postMessage({ type: 'localGitInfo', ...gitStat });
-          break;
-        case 'initLocalGit':
-          const rootInit = getWorkspaceRoot();
-          if (!rootInit) {
-            vscode.window.showWarningMessage(lang === 'es' ? 'Abre una carpeta de trabajo en VS Code primero.' : 'Open a workspace folder in VS Code first.');
-            break;
-          }
-          cp.exec('git init && git config user.name "Product Engineer" && git config user.email "engineer@local" && git add -A && git commit -m "chore: initial commit"', { cwd: rootInit }, async (err) => {
-            const upStat = await getLocalGitStatus();
-            mainPanel.webview.postMessage({ type: 'localGitInfo', ...upStat });
-            vscode.window.showInformationMessage(lang === 'es' ? 'Repositorio Git local inicializado correctamente.' : 'Local Git repository initialized successfully.');
-          });
-          break;
-        case 'commitLocal':
-          const rootCommit = getWorkspaceRoot();
-          const taskTitle = msg.title || 'complete task';
-          const commitMsgText = `feat(${msg.ticketId}): ${taskTitle}`;
-          if (!rootCommit) {
-            const virtualHash = 'loc-' + Math.random().toString(36).substring(2, 8);
-            mainPanel.webview.postMessage({ type: 'localCommitSuccess', ticketId: msg.ticketId, hash: virtualHash, branch: 'local' });
-            vscode.window.showInformationMessage(lang === 'es' ? `Commit local registrado para ${msg.ticketId}.` : `Local commit recorded for ${msg.ticketId}.`);
-            break;
-          }
-          cp.exec(`git config user.name "Product Engineer" && git config user.email "engineer@local" && git add -A && git commit -m "${commitMsgText.replace(/"/g, '\"')}"`, { cwd: rootCommit }, (cErr) => {
-            cp.exec('git rev-parse --short HEAD', { cwd: rootCommit }, (hErr, hOut) => {
-              const commitHash = hErr || !hOut.trim() ? 'loc-' + Math.random().toString(36).substring(2, 8) : hOut.trim();
-              cp.exec('git branch --show-current', { cwd: rootCommit }, (bErr, bOut) => {
-                const curBranch = bErr || !bOut.trim() ? 'main' : bOut.trim();
-                mainPanel.webview.postMessage({ type: 'localCommitSuccess', ticketId: msg.ticketId, hash: commitHash, branch: curBranch });
-                vscode.window.showInformationMessage(lang === 'es' ? `Commit local realizado (${commitHash}): ${commitMsgText}` : `Local commit created (${commitHash}): ${commitMsgText}`);
-              });
-            });
-          });
-          break;
-        case 'setActiveAi':
-          setState('activeAi', msg.provider);
-          break;
-        case 'openAiChat':
-          await triggerAiChat(msg.prompt || '', lang, msg.provider || getActiveAi());
-          break;
-        case 'saveTasks':
-          setState('tasks', msg.tasks);
-          break;
-        case 'saveEpics':
-          setState('epics', msg.epics);
-          break;
-        case 'confirmDeleteEpic':
-          const yesEp = lang === 'es' ? 'Eliminar' : 'Delete';
-          const promptEp = (lang === 'es' ? 'Eliminar epica ' : 'Delete epic ') + msg.epicId + '? ' + (lang === 'es' ? 'Las tareas asociadas quedaran sin epica asignada.' : 'Associated tasks will become unassigned.');
-          const respEp = await vscode.window.showWarningMessage(
-            promptEp,
-            { modal: true }, yesEp
-          );
-          if (respEp === yesEp) {
-            mainPanel.webview.postMessage({ type: 'deleteEpicConfirmed', epicId: msg.epicId });
-          }
-          break;
-        case 'openExternal':
-          if (msg.url) {
-            try {
-              await vscode.env.openExternal(vscode.Uri.parse(msg.url));
-            } catch (err) {
-              vscode.window.showErrorMessage('Error opening URL: ' + err.message);
-            }
-          }
-          break;
-        case 'startAiChat':
-        case 'syncWithAI':
-          await triggerAiChat(msg.prompt, lang, msg.provider || getActiveAi());
-          break;
-        case 'copyPrompt':
-          await vscode.env.clipboard.writeText(msg.text);
-          await triggerAiChat(msg.text, lang, msg.provider || getActiveAi());
-          break;
-        case 'pickEvidenceFiles':
-          const files = await vscode.window.showOpenDialog({
-            canSelectMany: true,
-            openLabel: lang === 'es' ? 'Adjuntar evidencia' : 'Attach evidence',
-            filters: {
-              [lang === 'es' ? 'Imágenes' : 'Images']: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg']
-            }
-          });
-          if (files && files.length > 0) {
-            const names = files.map(f => {
-              const parts = f.fsPath.split('/');
-              return parts[parts.length - 1];
-            });
-            mainPanel.webview.postMessage({ type: 'evidenceSelected', fileNames: names });
-            vscode.window.showInformationMessage(
-              lang === 'es'
-                ? `${names.length} archivo(s) adjuntado(s) como evidencia a Jira (${msg.ticketId}).`
-                : `${names.length} file(s) attached as evidence to Jira (${msg.ticketId}).`
-            );
-          }
-          break;
-        case 'runTerminalTests':
-          const terminal = vscode.window.activeTerminal || vscode.window.createTerminal('Product Studio: Tests');
-          terminal.show();
-          terminal.sendText('npm test || echo "Running tests..."');
-          break;
-        case 'attachEvidence':
-          vscode.window.showInformationMessage(`Product Studio: Evidence attached to Jira (${msg.ticketId}).`);
-          break;
-        case 'createMR':
-          vscode.window.showInformationMessage(`Product Studio: MR created on GitLab for ${msg.ticketId}.`);
-          break;
-        case 'changeLang':
-          await vscode.workspace.getConfiguration('productStudio').update('language', msg.lang, true);
-          mainPanel.webview.html = getMainHtml(
-            msg.lang,
-            getState('onboarded', false),
-            getState('connectedTools', []),
-            getTasks(),
-            null,
-            getDetectedExts(),
-            getActiveAi(),
-            getEpics(),
-            getState('localMode', false)
-          );
-          break;
-        case 'resetOnboarding':
-          setState('onboarded', false);
-          setState('connectedTools', []);
-          setState('localMode', false);
-          mainPanel.webview.html = getMainHtml(lang, false, [], getTasks(), null, getDetectedExts(), getActiveAi(), getEpics(), false);
-          break;
-        case 'confirmDelete':
-          const yes = lang === 'es' ? 'Eliminar' : 'Delete';
-          const resp = await vscode.window.showWarningMessage(
-            (lang === 'es' ? 'Eliminar tarea ' : 'Delete task ') + msg.ticketId + '?',
-            { modal: true }, yes
-          );
-          if (resp === yes) {
-            mainPanel.webview.postMessage({ type: 'deleteConfirmed', ticketId: msg.ticketId });
-          }
-          break;
-        case 'checkDocker':
-          const docStatus = await getDockerStatus();
-          const docContainers = await getDockerContainers();
-          mainPanel.webview.postMessage({
-            type: 'dockerInfo',
-            status: docStatus,
-            containers: docContainers
-          });
-          break;
-        case 'installDocker':
-          const term = vscode.window.activeTerminal || vscode.window.createTerminal('Product Studio: Setup');
-          term.show();
-          if (process.platform === 'darwin') {
-            term.sendText('echo "=== Instalando Docker en macOS ==="');
-            term.sendText('if ! command -v brew &> /dev/null; then echo "Instalando Homebrew..."; /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"; fi');
-            term.sendText('echo "Instalando Docker Desktop con Homebrew..." && brew install --cask docker && open -a Docker');
-          } else {
-            term.sendText('echo "Por favor visita https://docs.docker.com/get-docker/ para instalar Docker."');
-          }
-          break;
-        case 'startDockerDaemon':
-          if (process.platform === 'darwin') {
-            cp.exec('open -a Docker', (err) => {
-              if (err) {
-                vscode.window.showErrorMessage('Error al abrir Docker Desktop: ' + err.message);
-              } else {
-                vscode.window.showInformationMessage(lang === 'es' ? 'Abriendo Docker Desktop...' : 'Opening Docker Desktop...');
-              }
-            });
-          }
-          break;
-        case 'launchDockerService':
-          let cmd = '';
-          if (msg.service === 'postgres') {
-            cmd = 'docker run -d --name ps-postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:alpine || docker start ps-postgres';
-          } else if (msg.service === 'mysql') {
-            cmd = 'docker run -d --name ps-mysql -e MYSQL_ROOT_PASSWORD=mysql -p 3306:3306 mysql:latest || docker start ps-mysql';
-          } else if (msg.service === 'redis') {
-            cmd = 'docker run -d --name ps-redis -p 6379:6379 redis:alpine || docker start ps-redis';
-          } else if (msg.service === 'compose') {
-            cmd = 'docker compose up -d';
-          }
-          if (cmd) {
-            cp.exec(cmd, async (err) => {
-              if (err) {
-                vscode.window.showErrorMessage('Error al iniciar servicio: ' + err.message);
-              } else {
-                vscode.window.showInformationMessage(lang === 'es' ? 'Servicio iniciado correctamente.' : 'Service started successfully.');
-              }
-              const updatedStatus = await getDockerStatus();
-              const updatedContainers = await getDockerContainers();
-              mainPanel.webview.postMessage({
-                type: 'dockerInfo',
-                status: updatedStatus,
-                containers: updatedContainers
-              });
-            });
-          }
-          break;
-        case 'stopDockerContainer':
-          if (msg.containerId) {
-            cp.exec(`docker stop ${msg.containerId}`, async () => {
-              const updatedStatus = await getDockerStatus();
-              const updatedContainers = await getDockerContainers();
-              mainPanel.webview.postMessage({
-                type: 'dockerInfo',
-                status: updatedStatus,
-                containers: updatedContainers
-              });
-              vscode.window.showInformationMessage(lang === 'es' ? 'Contenedor detenido.' : 'Container stopped.');
-            });
-          }
-          break;
-      }
-    });
-
-    mainPanel.onDidDispose(() => { mainPanel = null; });
-  }
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand('productStudio.open', () => openMain()),
-    vscode.commands.registerCommand('productStudio.createTask', () => {
-      openMain();
-      setTimeout(() => {
-        if (mainPanel) mainPanel.webview.postMessage({ type: 'showCreateTask' });
-      }, 500);
-    }),
-    vscode.commands.registerCommand('productStudio.resetOnboarding', () => {
-      setState('onboarded', false);
-      setState('connectedTools', []);
-      if (mainPanel) mainPanel.webview.html = getMainHtml(getLang(), false, [], getTasks(), null, getDetectedExts(), getActiveAi(), getEpics(), false);
-      vscode.window.showInformationMessage('Product Studio: Onboarding reset.');
-    })
-  );
-
-  openMain();
+function attrEncode(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
 }
-
-// =====================================================================
-// MAIN WEBVIEW — Full app
-// =====================================================================
-function getMainHtml(lang, onboarded, connectedTools, storedTasks, initialTicket, detectedExts, activeAi, storedEpics, localMode) {
-  const tasksJson = JSON.stringify(storedTasks || null);
-  const epicsJson = JSON.stringify(storedEpics || null);
-  const connJson = JSON.stringify(connectedTools || []);
-  const detectedJson = JSON.stringify(detectedExts || { gitlab: false, github: false, jira: false });
-  const aiProvider = activeAi || 'Claude';
-
-  return String.raw`<!DOCTYPE html><html><head><meta charset="UTF-8">
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--vscode-editor-background);color:var(--vscode-foreground);height:100vh;overflow:hidden;display:flex;flex-direction:column}
-::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(120,120,120,.25);border-radius:3px}
-*{transition:all .12s ease}
-.topbar{background:var(--vscode-titleBar-activeBackground);border-bottom:1px solid var(--vscode-panel-border);padding:6px 14px;display:flex;align-items:center;justify-content:space-between;font-size:12px;flex-shrink:0}
-.topbar button{background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;font-size:12px;display:inline-flex;align-items:center;gap:4px;padding:2px 4px;border-radius:4px}
-.topbar button:hover{color:var(--vscode-foreground);background:var(--vscode-toolbar-hoverBackground)}
-.main{flex:1;overflow-y:auto;overflow-x:hidden}
-.ctr{max-width:640px;margin:0 auto;padding:24px;width:100%}
-#sOb .ctr{max-width:720px}
-.tool-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(195px, 1fr));gap:8px;margin-bottom:8px}
-.cat-pills{display:flex;gap:4px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
-.cat-pill{padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid var(--vscode-panel-border);background:transparent;color:var(--vscode-descriptionForeground);white-space:nowrap}
-.cat-pill.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border-color:var(--vscode-button-background)}
-.md-toolbar{display:flex;gap:4px;padding:4px 8px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-bottom:none;border-radius:6px 6px 0 0;font-size:11px;align-items:center}
-.md-toolbar button{background:none;border:none;cursor:pointer;padding:3px 6px;border-radius:4px;color:var(--vscode-descriptionForeground);font-weight:600;font-size:11px}
-.md-toolbar button:hover{background:var(--vscode-toolbar-hoverBackground);color:var(--vscode-foreground)}
-.md-editor{border-radius:0 0 6px 6px !important}
-.md-preview{background:var(--vscode-input-background);border:1px solid var(--vscode-input-border);border-radius:0 0 6px 6px;padding:10px;font-size:12px;line-height:1.5;max-height:160px;overflow-y:auto}
-.md-preview h3{font-size:13px;font-weight:700;margin:6px 0 3px}
-.md-preview h4{font-size:12px;font-weight:700;margin:5px 0 2px}
-.md-preview ul{padding-left:16px;margin:3px 0}
-#sOb{height:100%;min-height:100%;display:flex}
-#sOb .ctr{height:100%;min-height:100%;display:flex;flex-direction:column;justify-content:center}
-#sOb .ctr>*{flex-shrink:0}
-#sOb #cList{flex:1 1 auto;min-height:160px;max-height:360px;overflow-y:auto}
-.card{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:14px;margin-bottom:12px}
-.card-bg{background:var(--vscode-sideBar-background)}
-.bp{background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;border-radius:4px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
-.bp:hover{background:var(--vscode-button-hoverBackground)}
-.bs{background:transparent;border:1px solid var(--vscode-panel-border);border-radius:4px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;width:100%;color:var(--vscode-foreground);display:flex;align-items:center;justify-content:center;gap:6px}
-.bs:hover{background:var(--vscode-toolbar-hoverBackground);border-color:var(--vscode-focusBorder)}
-.task-check-circle{width:16px;height:16px;border-radius:3px;border:1px solid var(--vscode-panel-border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--vscode-button-foreground);padding:0;flex-shrink:0}
-.task-check-circle:hover{border-color:var(--vscode-focusBorder)}
-.task-check-circle.checked{background:var(--vscode-button-background);border-color:var(--vscode-button-background)}
-.task-check-circle.checked svg{width:11px;height:11px}
-.bg{background:#e24329;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
-.bg:hover{background:#c0341d}
-.inp{width:100%;background:var(--vscode-input-background);border:1px solid var(--vscode-input-border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--vscode-input-foreground);outline:none}
-.inp:focus{border-color:var(--vscode-focusBorder)}
-select.inp{cursor:pointer}
-.lbl{font-size:11px;font-weight:600;color:var(--vscode-descriptionForeground);margin-bottom:4px;display:block}
-.cat-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--vscode-descriptionForeground);margin:10px 0 4px}
-.cc{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.cc:hover{border-color:var(--vscode-descriptionForeground)}
-.cc.sel{border-color:var(--vscode-focusBorder);background:rgba(59,130,246,.08)}
-.cc.hid{display:none}
-.tr{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:14px;cursor:pointer;margin-bottom:8px;display:flex;align-items:start;justify-content:space-between}
-.tr:hover{background:rgba(59,130,246,.04)}
-.sd{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
-.sd-a{background:var(--vscode-focusBorder);box-shadow:0 0 6px var(--vscode-focusBorder)}
-.sd-d{background:#10b981}
-.sd-p{background:var(--vscode-panel-border)}
-.pb{width:100%;text-align:left;padding:10px 14px;border-radius:8px;border:1px solid var(--vscode-panel-border);background:var(--vscode-sideBar-background);cursor:pointer;font-size:13px;color:var(--vscode-foreground);display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
-.pb:hover{border-color:var(--vscode-focusBorder)}
-.pb.fl{background:rgba(59,130,246,.1)}
-.tok{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;background:rgba(16,185,129,.08);color:#10b981;font-size:12px;margin-bottom:4px}
-.toast{position:fixed;bottom:12px;right:12px;background:var(--vscode-editorWidget-background);border:1px solid var(--vscode-panel-border);color:var(--vscode-foreground);padding:8px 14px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:6px;transform:translateY(60px);opacity:0;transition:all .2s;z-index:99;pointer-events:none}
-.toast.show{transform:translateY(0);opacity:1}
-.clip{position:fixed;top:50px;left:50%;transform:translateX(-50%) translateY(-10px);background:var(--vscode-button-background);color:var(--vscode-button-foreground);padding:6px 14px;border-radius:8px;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;opacity:0;transition:all .2s;z-index:99;pointer-events:none}
-.clip.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.fi{animation:fi .2s ease}
-@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-.badge{font-size:10px;padding:2px 6px;border-radius:4px;font-weight:600}
-.lt{display:flex;border:1px solid var(--vscode-panel-border);border-radius:6px;overflow:hidden;font-size:11px}
-.lt button{padding:3px 8px;border:none;cursor:pointer;font-weight:600;background:transparent;color:var(--vscode-descriptionForeground)}
-.lt button.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
-.del-btn{background:none;border:none;cursor:pointer;color:var(--vscode-descriptionForeground);padding:4px;border-radius:4px;display:flex;align-items:center}
-.del-btn:hover{background:rgba(239,68,68,.15);color:#ef4444}
-.crit-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
-.crit-row .inp{flex:1}
-.crit-row button{background:none;border:none;cursor:pointer;color:var(--vscode-descriptionForeground);padding:2px}
-.crit-row button:hover{color:#ef4444}
-.ext-badge{font-size:9px;background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);padding:2px 5px;border-radius:4px;font-weight:600;display:inline-flex;align-items:center;gap:3px}
-.task-card{border:1px solid var(--vscode-panel-border);border-radius:8px;padding:12px 14px;margin-bottom:8px;background:var(--vscode-sideBar-background);cursor:pointer;transition:all .15s ease;display:flex;align-items:center;gap:12px}
-.task-card:hover{border-color:var(--vscode-focusBorder);background:rgba(255,255,255,.04);transform:translateY(-1px)}
-.task-card:active{transform:translateY(0)}
-.epic-card{border:1px solid var(--vscode-panel-border);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:var(--vscode-sideBar-background);cursor:pointer;transition:all .15s ease}
-.epic-card:hover{border-color:var(--vscode-focusBorder);background:rgba(255,255,255,.04);transform:translateY(-1px)}
-.epic-card:active{transform:translateY(0)}
-.seg-tabs{display:flex;gap:4px;background:var(--vscode-sideBar-background);border:1px solid var(--vscode-panel-border);border-radius:6px;padding:3px;font-size:12px}
-.seg-tab{padding:5px 12px;border-radius:5px;cursor:pointer;border:none;background:transparent;color:var(--vscode-descriptionForeground);font-weight:600;display:flex;align-items:center;gap:6px;font-size:12px;flex:1;justify-content:center}
-.seg-tab.active{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
-.seg-tab:hover:not(.active){color:var(--vscode-foreground);background:rgba(255,255,255,.04)}
-.epic-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
-.epic-chip{font-size:11px;padding:4px 10px;border-radius:12px;border:1px solid var(--vscode-panel-border);background:var(--vscode-sideBar-background);color:var(--vscode-descriptionForeground);cursor:pointer;white-space:nowrap;font-weight:500}
-.epic-chip.active{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.4);color:#60a5fa;font-weight:600}
-.epic-chip:hover:not(.active){border-color:var(--vscode-descriptionForeground);color:var(--vscode-foreground)}
-.pbar{height:6px;background:var(--vscode-panel-border);border-radius:3px;overflow:hidden;margin-top:6px}
-.pbar-fill{height:100%;background:#10b981;border-radius:3px;transition:width .3s}
-.test-box{border:1px solid var(--vscode-panel-border);border-radius:6px;padding:8px 10px;margin-bottom:6px;background:var(--vscode-sideBar-background);display:flex;align-items:center;justify-content:space-between}
-.ss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:8px 0}
-.ss-card{border:1px solid var(--vscode-panel-border);border-radius:6px;overflow:hidden;background:var(--vscode-sideBar-background);font-size:11px}
-.ss-card:hover{border-color:var(--vscode-focusBorder)}
-</style></head><body>
-
-<div class="topbar">
-  <div style="display:flex;align-items:center;gap:6px">
-    <strong>Product Studio</strong>
-    <span style="color:var(--vscode-descriptionForeground);font-size:11px" id="topLbl"></span>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px" id="topAct" ${onboarded ? '' : 'style="display:none"'}>
-    <div class="lt">
-      <button id="lEs" class="${lang === 'es' ? 'active' : ''}" onclick="cLang('es')">ES</button>
-      <button id="lEn" class="${lang === 'en' ? 'active' : ''}" onclick="cLang('en')">EN</button>
-    </div>
-    <button onclick="startOb()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span id="bNP"></span></button>
-    <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
-    <button onclick="showScr('env')" title="Docker & Entorno local"><svg viewBox="0 0 24 24" width="13" height="13" fill="#2496ED"><path d="M13.98 11.08h1.83V9.25H13.98v1.83zm-2.4 0h1.83V9.25h-1.83v1.83zm-2.41 0H11V9.25H9.17v1.83zm-2.4 0h1.83V9.25H6.77v1.83zm-2.41 0h1.83V9.25H4.36v1.83zm4.81-2.34h1.83V6.91H9.17v1.83zm2.4 0h1.83V6.91h-1.83v1.83zm2.41 0h1.83V6.91h-1.83v1.83zm-4.81-2.33h1.83V4.58H9.17v1.83zm13.78 6.42c-.44-.31-1.42-.45-2.2-.18-.17-.74-.6-1.39-1.25-1.88l-.51-.38-.34.54c-.38.59-.51 1.34-.41 2.05-.62.33-1.63.38-2.18.38H1.67c-.37 0-.67.3-.67.67 0 2.22.86 4.3 2.42 5.86C5.07 23.8 7.39 24.5 12 24.5c6.53 0 10.9-3.9 11.95-10.42.06-.41.05-.98-.5-1.76l-.5-.33z"/></svg><span>Docker</span><span class="sd sd-p" id="envDot" style="width:6px;height:6px"></span></button>
-    <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
-    <span id="topLocalBadge" class="badge" style="background:var(--vscode-badge-background, rgba(255,255,255,.08));color:var(--vscode-badge-foreground, var(--vscode-foreground));border:1px solid var(--vscode-panel-border);font-size:10px;padding:2px 6px;${localMode ? '' : 'display:none'}">Local</span>
-    <button onclick="showScr('ai')" id="topAiBtn" title="Asistente de IA"><span id="topAiIcon"></span><span id="topAiName">${aiProvider}</span><span class="sd sd-d" id="topAiDot" style="width:6px;height:6px;background:#10b981"></span></button>
-    <span style="width:1px;height:12px;background:var(--vscode-panel-border)"></span>
-    <button onclick="showScr('settings')"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span id="bRC"></span></button>
-  </div>
-</div>
-
-<div class="main">
-  <div id="sOb" ${onboarded ? 'style="display:none"' : ''}></div>
-  <div id="sHome" style="display:none"></div>
-  <div id="sTk" style="display:none"></div>
-  <div id="sSet" style="display:none"></div>
-  <div id="sCreate" style="display:none"></div>
-  <div id="sCreateEpic" style="display:none"></div>
-  <div id="sEnv" style="display:none"></div>
-  <div id="sAi" style="display:none"></div>
-</div>
-
-<div class="toast" id="toastEl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg><span id="toastTx"></span></div>
-<div class="clip" id="clipEl"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span id="clipTx"></span></div>
-
-<script>
-const vsc=acquireVsCodeApi();
-let L='${lang}',onb=${onboarded},cTools=${connJson},detExts=${detectedJson};
-let isLocalMode = ${localMode ? 'true' : 'false'};
-let activeAi='${aiProvider}';
 let localGitState = { hasGit: false, branch: 'main', hasChanges: false, commits: 0, rootPath: null };
 let selC=new Set(); // Start empty - let user pick their own stack!
 let aTk=null,cS=1,filterMode='all';
@@ -671,32 +66,8 @@ const lg={
   GCP:'<svg viewBox="0 0 24 24" width="18" height="18"><path fill="#4285F4" d="M12 7.2l3.9 6.8h-2.4l-1.5-2.6-1.5 2.6H8.1z"/><path fill="#EA4335" d="M15.9 14H20l-4-7H12z"/><path fill="#34A853" d="M12 20l-3.9-6h7.8z"/></svg>'
 };
 
-// i18n
-const D={
-  es:{
-    newP:'Nuevo proyecto',reconf:'Reconfigurar',obS:'Paso {n} de {t}',obT1:'Que herramientas usa tu equipo?',obS1:'Selecciona las que quieras conectar.',obSrch:'Buscar herramientas...',obSel:'{n} seleccionada/s',cont:'Continuar',back:'Atras',obT2:'Conecta tu Jira',obS2:'Ingresa dominio y proyecto.',obJD:'Dominio de Jira',obPr:'Proyecto',obCA:'Conectar con Atlassian en navegador',obT3:'Conecta tu repositorio',obS3:'Vincula el repositorio del proyecto.',obPv:'Proveedor',obRe:'Repositorio',obGo:'Empezar a trabajar',
-    backlog:'Backlog',myT:'Mis tareas',asgn:'{n} tareas',allT:'Todas',myOnly:'Asignadas a mi',pOk:'Pipeline OK',nErr:'0 errores',tsk:'Tareas',stp:'PASO',wh:'Que hay que hacer',spO:'Objetivo de la investigacion',crit:'Criterios para dar por terminado',spD:'Entregables esperados',fig:'Diseno en Figma',askAI:'Pedile a la IA que empiece',askSp:'Empezar a investigar con la IA',aiH:'Se abre tu chat (Claude, Copilot o Antigravity) con el contexto cargado.',wAI:'Trabaja con la IA',iAI:'Investiga con la IA',clCp:'Click en una sugerencia para copiarla y pegarla en tu chat.',ctxS:'Contexto enviado al asistente',sugL:'Sugerencias — click para copiar:',aiDT:'La IA termino, quiero testear',aiDD:'Ya tengo la info, documentar',testT:'Testear los cambios',testS:'La IA genero tests automaticos. Proba manualmente tambien.',aiTst:'Tests automaticos (IA)',rerun:'Ejecutar de nuevo',tPas:'{n}/{t} tests OK',mPrev:'Vista previa manual',allG:'Todo funciona, revisar',smW:'Algo fallo, volver al chat',docT:'Documentar hallazgos',docS:'Publica el resultado de tu investigacion.',cConf:'Crear pagina en Confluence',cNot:'Crear pagina en Notion',cOS:'Crear spec en OpenSpec',jCom:'Comentario para Jira',pubCl:'Publicar y cerrar ticket',revT:'Revisar y documentar',revS:'Agrega capturas y comentarios a Jira.',evid:'Evidencia',addSS:'Agregar captura',upMR:'Subir evidencia y continuar',mrT:'Crear Merge Request',mrS:'Todo listo para enviar.',branch:'Rama',tests:'Tests',crMR:'Crear Merge Request en GitLab',tDone:'Tarea completada',mrMsg:'Merge Request creado. Ticket movido a "En revision". El pipeline despliega.',spMsg:'Investigacion documentada. Ticket cerrado.',nxtT:'Siguiente tarea',cTls:'Herramientas conectadas',stS:'Administra tus integraciones.',conn:'Conectado',nPS:'Configurar nuevo proyecto',cpd:'Copiado',
-    cPop:'Herramientas populares',cAI:'Modelos de IA',cPr:'Gestion de proyecto',cCo:'Codigo',cDs:'Diseno',cDc:'Documentacion',cDa:'Base de datos',cMo:'Monitoreo',cCl:'Cloud',
-    newTask:'Nueva tarea',delTask:'Eliminar',crTitle:'Crear nueva tarea',crTitleF:'Titulo',crDescF:'Descripcion',crTypeF:'Tipo',crCritF:'Criterios de aceptacion',crAdd:'Agregar criterio',crSave:'Crear tarea',crCancel:'Cancelar',noTasks:'No hay tareas. Crea una nueva.',
-    vsPluginDetected:'Plugin VS Code detectado',openBrw:'Abriendo navegador...',assigned:'Asignado a',
-    envT:'Entorno local & Docker',envS:'Levanta bases de datos y servicios en tu maquina en 1 clic.',docStatus:'Estado de Docker',docInst:'Instalar Docker con Homebrew (Terminal)',docInstDesc:'Docker te permite correr bases de datos (Postgres, MySQL) y tu app localmente sin configurar nada.',docStart:'Iniciar Docker Desktop',docDwn:'Descargar instalador oficial (.dmg)',docRun:'Docker Desktop activo',docNotRun:'Docker instalado pero apagado',docNotRunDesc:'Docker esta instalado en tu Mac pero la aplicacion no esta abierta.',docNotInst:'Docker no detectado',quickDb:'Bases de datos locales (1 clic)',startComp:'Levantar aplicacion (docker-compose)',actCont:'Contenedores locales activos',noCont:'No hay contenedores corriendo actualmente.',stopBtn:'Detener',checkAgain:'Verificar de nuevo',
-    aiHubT:'Asistentes de IA & Modelos',aiHubS:'Conecta tu chat preferido. Al trabajar en tickets, el contexto y los prompts se abren directamente en tu asistente.',aiActLbl:'Asistente activo para tickets y prompts',aiOpenBtn:'Abrir chat de {name}',aiAvail:'Modelos y Asistentes disponibles',aiUseBtn:'Usar este',aiConnBadge:'Conectado a VS Code',
-    viewCards:'Tarjetas',viewEpics:'Por Epic',viewRoadmap:'Roadmap & Milestones',epicLbl:'Epic',milestoneLbl:'Milestone',activeMilestone:'Hito actual',roadMapTitle:'Hoja de ruta y objetivos',genMoreTests:'Generar mas tests automaticos (IA)',genMoreSS:'Tomar captura automatica (Playwright)',autoSS:'Capturas generadas por tests',autoBadge:'Auto-capturado por Playwright',autoTestBadge:'Generado por IA',addedTestToast:'2 tests automaticos y nueva captura agregados con IA',addedSsToast:'Nueva captura automatica generada por Playwright',
-    startLocally:'Empezar en local',startLocallyDesc:'Trabaja en tu maquina sin Jira ni herramientas externas. Crea epicas, historias y commits 100% locales en tu carpeta.',startLocallyBtn:'Empezar en modo local',commitLocal:'Commit local',commitLocalBtn:'Guardar cambios con Commit local',initGitBtn:'Inicializar Git en esta carpeta (git init)',noGitFolder:'No se detecto repositorio Git en este proyecto.',localCommitMsg:'Cambios guardados en commit local. Tarea completada.'
-  },
-  en:{
-    newP:'New project',reconf:'Reconfigure',obS:'Step {n} of {t}',obT1:'What tools does your team use?',obS1:'Select the ones you want to connect.',obSrch:'Search tools...',obSel:'{n} selected',cont:'Continue',back:'Back',obT2:'Connect your Jira',obS2:'Enter domain and project.',obJD:'Jira domain',obPr:'Project',obCA:'Connect with Atlassian in browser',obT3:'Connect your repository',obS3:'Link the project repository.',obPv:'Provider',obRe:'Repository',obGo:'Start working',
-    backlog:'Backlog',myT:'My tasks',asgn:'{n} tasks',allT:'All',myOnly:'Assigned to me',pOk:'Pipeline OK',nErr:'0 errors',tsk:'Tasks',stp:'STEP',wh:'What needs to be done',spO:'Investigation objective',crit:'Acceptance criteria',spD:'Expected deliverables',fig:'Figma design',askAI:'Ask the AI to start',askSp:'Start investigating with AI',aiH:'Opens your AI chat (Claude, Copilot or Antigravity) with context loaded.',wAI:'Work with AI',iAI:'Investigate with AI',clCp:'Click a suggestion to copy and paste in your AI chat.',ctxS:'Context sent to assistant',sugL:'Suggestions — click to copy:',aiDT:"AI is done, let's test",aiDD:"Got the info, document",testT:'Test the changes',testS:'AI generated automated tests. You can also test manually.',aiTst:'Automated tests (AI)',rerun:'Re-run',tPas:'{n}/{t} tests OK',mPrev:'Manual preview',allG:"All good, let's review",smW:'Something failed, back to chat',docT:'Document findings',docS:'Publish your research results.',cConf:'Create Confluence page',cNot:'Create Notion page',cOS:'Create OpenSpec spec',jCom:'Jira comment',pubCl:'Publish and close ticket',revT:'Review and document',revS:'Add screenshots and comments to Jira.',evid:'Evidence',addSS:'Add screenshot',upMR:'Upload evidence and continue',mrT:'Create Merge Request',mrS:'All set to submit.',branch:'Branch',tests:'Tests',crMR:'Create Merge Request on GitLab',tDone:'Task completed',mrMsg:'MR created. Ticket moved to "In Review". Pipeline handles deploy.',spMsg:'Research documented. Ticket closed.',nxtT:'Next task',cTls:'Connected tools',stS:'Manage your integrations.',conn:'Connected',nPS:'Set up new project',cpd:'Copied',
-    cPop:'Popular tools',cAI:'AI Assistants',cPr:'Project management',cCo:'Code',cDs:'Design',cDc:'Documentation',cDa:'Database',cMo:'Monitoring',cCl:'Cloud',
-    newTask:'New task',delTask:'Delete',crTitle:'Create new task',crTitleF:'Title',crDescF:'Description',crTypeF:'Type',crCritF:'Acceptance criteria',crAdd:'Add criterion',crSave:'Create task',crCancel:'Cancel',noTasks:'No tasks yet. Create one.',
-    vsPluginDetected:'VS Code plugin detected',openBrw:'Opening browser...',assigned:'Assigned to',
-    envT:'Local Environment & Docker',envS:'Launch local databases and services on your machine in 1 click.',docStatus:'Docker Status',docInst:'Install Docker with Homebrew (Terminal)',docInstDesc:'Docker allows you to run databases (Postgres, MySQL) and your app locally without manual config.',docStart:'Start Docker Desktop',docDwn:'Download official installer (.dmg)',docRun:'Docker Desktop running',docNotRun:'Docker installed but stopped',docNotRunDesc:'Docker is installed on your Mac but the app is not open.',docNotInst:'Docker not detected',quickDb:'Local databases (1 click)',startComp:'Start application (docker-compose)',actCont:'Active local containers',noCont:'No containers currently running.',stopBtn:'Stop',checkAgain:'Check again',
-    aiHubT:'AI Assistants & Models',aiHubS:'Connect your preferred chat. When working on tickets, context and prompts open directly in your assistant.',aiActLbl:'Active assistant for tickets and prompts',aiOpenBtn:'Open {name} chat',aiAvail:'Available Models & Assistants',aiUseBtn:'Use this',aiConnBadge:'Connected to VS Code',
-    viewCards:'Cards',viewEpics:'By Epic',viewRoadmap:'Roadmap & Milestones',epicLbl:'Epic',milestoneLbl:'Milestone',activeMilestone:'Active Milestone',roadMapTitle:'Roadmap & Milestones',genMoreTests:'Generate more automated tests (AI)',genMoreSS:'Capture automated screenshot (Playwright)',autoSS:'Automated test screenshots',autoBadge:'Auto-captured by Playwright',autoTestBadge:'AI Generated',addedTestToast:'2 automated tests & new screenshot added with AI',addedSsToast:'New automated screenshot generated by Playwright',
-    startLocally:'Start locally',startLocallyDesc:'Work on your machine without Jira or external tools. Create epics, stories, and commits 100% locally in your folder.',startLocallyBtn:'Start in local mode',commitLocal:'Local commit',commitLocalBtn:'Save changes with local Commit',initGitBtn:'Initialize Git in this folder (git init)',noGitFolder:'No Git repository detected in this project folder.',localCommitMsg:'Changes saved to local commit. Task completed.'
-  }
-};
-function t(k,v){let s=(D[L]&&D[L][k])||k;if(v)Object.entries(v).forEach(([a,b])=>{s=s.replace('{'+a+'}',b)});return s}
+function t(k, v) { return ProductStudioI18n.lookup(D, L, k, v); }
+
 
 // Connectors catalog
 const popularNames=['Claude','GitHub Copilot','Jira','GitHub','GitLab','Figma','Asana','ClickUp'];
@@ -737,7 +108,7 @@ const tDet={
 const defaultEpics = {};
 const defaultMilestones = {};
 
-let epics = (${epicsJson} && Object.keys(${epicsJson}).length > 0) ? ${epicsJson} : {};
+let epics = (bootstrap.epics && Object.keys(bootstrap.epics).length > 0) ? bootstrap.epics : {};
 let milestones = defaultMilestones;
 let selectedEpicId = null; // null = list of epics; string = tasks in that epic
 let editingEpicId = null; // null = new epic, string = editing existing epic
@@ -867,7 +238,7 @@ function getMilestoneProgress(milestoneId) {
 // Tasks (mutable, empty by default - no demo data)
 let nextId = 100;
 const defaultTasks = {};
-let tasks = (${tasksJson} && Object.keys(${tasksJson}).length > 0) ? ${tasksJson} : {};
+let tasks = (bootstrap.tasks && Object.keys(bootstrap.tasks).length > 0) ? bootstrap.tasks : {};
 
 function saveTasks(){vsc.postMessage({type:'saveTasks',tasks})}
 
@@ -980,7 +351,7 @@ function rObS(){
     h+='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
     h+='<span>'+(L==='es'?'No sabes por donde empezar?':'New here? Where to start')+'</span>';
     h+='</div>';
-    h+='<button class="bp" style="width:auto;padding:5px 12px;font-size:11.5px" onclick="selectStarterStack()">'+(L==='es'?'Elegir combinacion basica':'Pick starter stack')+'</button>';
+    h+='<button class="bp" style="width:auto;padding:5px 12px;font-size:11.5px" data-act="selectStarterStack">'+(L==='es'?'Elegir combinacion basica':'Pick starter stack')+'</button>';
     h+='</div>';
     h+='<p style="font-size:12px;color:var(--vscode-descriptionForeground);line-height:1.45;margin-bottom:10px">';
     h+=(L==='es'
@@ -988,7 +359,7 @@ function rObS(){
       :'You only need 3 basics: <strong>1 AI Assistant</strong> (Claude or Copilot to write code), <strong>1 Task Manager</strong> (Jira or Asana), and <strong>1 Repository</strong> (GitLab or GitHub). Click the button above to pre-select them.');
     h+='</p>';
     h+='<div style="display:flex;justify-content:flex-end">';
-    h+='<button class="bs" style="width:auto;font-size:11px;padding:3px 8px" onclick="obN(1)">'+(L==='es'?'Personalizar herramientas manualmente ›':'Customize tools manually ›')+'</button>';
+    h+='<button class="bs" style="width:auto;font-size:11px;padding:3px 8px" data-act="obN" data-arg="1">'+(L==='es'?'Personalizar herramientas manualmente ›':'Customize tools manually ›')+'</button>';
     h+='</div>';
     h+='</div>';
 
@@ -999,7 +370,7 @@ function rObS(){
     h+='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>';
     h+='<span>'+(L==='es'?'Empezar en local':'Start locally')+'</span>';
     h+='</div>';
-    h+='<button class="bp" style="width:auto;padding:5px 12px;font-size:11.5px" onclick="startLocally()">'+(L==='es'?'Empezar en modo local':'Start in local mode')+'</button>';
+    h+='<button class="bp" style="width:auto;padding:5px 12px;font-size:11.5px" data-act="startLocally">'+(L==='es'?'Empezar en modo local':'Start in local mode')+'</button>';
     h+='</div>';
     h+='<p style="font-size:12px;color:var(--vscode-descriptionForeground);line-height:1.45;margin-bottom:0">';
     h+=(L==='es'
@@ -1016,16 +387,16 @@ function rObS(){
 
     // Search bar & Explanation toggle
     h+='<div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">';
-    h+='<div style="position:relative;flex:1"><svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-descriptionForeground)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="inp" style="padding-left:30px" placeholder="'+t('obSrch')+'" oninput="fC(this.value)"></div>';
-    h+='<button class="bs" style="width:auto;padding:8px 10px;font-size:11px;white-space:nowrap" onclick="toggleToolTips()" id="tipToggleBtn">'+(showTips?(L==='es'?'Ocultar tips':'Hide tips'):(L==='es'?'Ver explicaciones':'Show explanations'))+'</button>';
+    h+='<div style="position:relative;flex:1"><svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-descriptionForeground)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="inp" style="padding-left:30px" placeholder="'+t('obSrch')+'" data-input="fC"></div>';
+    h+='<button class="bs" style="width:auto;padding:8px 10px;font-size:11px;white-space:nowrap" data-act="toggleToolTips" id="tipToggleBtn">'+(showTips?(L==='es'?'Ocultar tips':'Hide tips'):(L==='es'?'Ver explicaciones':'Show explanations'))+'</button>';
     h+='</div>';
 
     // Category pills filter
     h+='<div class="cat-pills">';
-    h+='<button class="cat-pill active" onclick="setCatFilter(\'all\', this)">'+(L==='es'?'Todas':'All')+'</button>';
-    h+='<button class="cat-pill" onclick="setCatFilter(\'popular\', this)">'+t('cPop')+'</button>';
+    h+='<button class="cat-pill active" data-act="setCatFilter" data-arg="all">'+(L==='es'?'Todas':'All')+'</button>';
+    h+='<button class="cat-pill" data-act="setCatFilter" data-arg="popular">'+t('cPop')+'</button>';
     catOrder.forEach(cat=>{
-      h+='<button class="cat-pill" onclick="setCatFilter(\''+cat+'\', this)">'+t(cat)+'</button>';
+      h+='<button class="cat-pill" data-act="setCatFilter" data-arg="' + cat + '">'+t(cat)+'</button>';
     });
     h+='</div>';
 
@@ -1045,7 +416,7 @@ function rObS(){
       }
       let popBadge = isPop ? '<span style="font-size:10px;color:var(--vscode-focusBorder);margin-left:auto;font-weight:700">POP</span>' : '';
 
-      h+='<div class="cc'+(s?' sel':'')+'" data-name="'+cn.n+'" data-cat="'+cn.c+'" data-pop="'+(isPop?'1':'0')+'" data-desc="'+d.replace(/"/g,'&quot;')+'" title="'+tipText.replace(/"/g,'&quot;')+'" onclick="tC(this)">'+
+      h+='<div class="cc'+(s?' sel':'')+'" data-name="'+cn.n+'" data-cat="'+cn.c+'" data-pop="'+(isPop?'1':'0')+'" data-desc="'+d.replace(/"/g,'&quot;')+'" title="'+tipText.replace(/"/g,'&quot;')+'" data-act="tC">'+
         (lg[cn.n]||'') +
         '<div style="flex:1;min-width:0">'+
           '<div style="display:flex;align-items:center;gap:4px">'+
@@ -1060,20 +431,20 @@ function rObS(){
     });
     h+='</div>';
 
-    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px"><button class="bs" style="width:auto;padding:6px 14px;font-size:12px" onclick="obN(0)">'+t('back')+'</button><div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:var(--vscode-descriptionForeground)" id="cCnt">'+t('obSel',{n:selC.size})+'</span><button class="bp" style="width:auto;padding:6px 18px;font-size:12px" onclick="obN(2)">'+t('cont')+'</button></div></div>';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px"><button class="bs" style="width:auto;padding:6px 14px;font-size:12px" data-act="obN" data-arg="0">'+t('back')+'</button><div style="display:flex;align-items:center;gap:10px"><span style="font-size:11px;color:var(--vscode-descriptionForeground)" id="cCnt">'+t('obSel',{n:selC.size})+'</span><button class="bp" style="width:auto;padding:6px 18px;font-size:12px" data-act="obN" data-arg="2">'+t('cont')+'</button></div></div>';
     c.innerHTML=h;
   }else if(obS===2){
     let jDetMsg='';
     if(detExts.jira){
       jDetMsg='<div style="margin-bottom:10px" class="ext-badge">'+svgCheck+' '+t('vsPluginDetected')+' (Atlassian)</div>';
     }
-    c.innerHTML='<div style="text-align:center;font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px;font-weight:600">'+t('obS',{n:2,t:3})+'</div><h2 style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px">'+t('obT2')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);text-align:center;margin-bottom:14px">'+t('obS2')+'</p>'+jDetMsg+'<label class="lbl">'+t('obJD')+'</label><input class="inp" id="obJiraDom" value="tu-empresa.atlassian.net" style="margin-bottom:8px"><label class="lbl">'+t('obPr')+'</label><input class="inp" id="obJiraProj" value="PROJ" style="margin-bottom:8px"><button class="bs" style="margin-bottom:14px" onclick="connectJira()"><span style="display:flex;align-items:center;gap:6px">'+lg.Jira+' '+t('obCA')+'</span> '+svgExtLink+'</button><div style="display:flex;gap:8px"><button class="bs" onclick="obN(1)">'+t('back')+'</button><button class="bp" onclick="obN(3)">'+t('cont')+'</button></div>';
+    c.innerHTML='<div style="text-align:center;font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px;font-weight:600">'+t('obS',{n:2,t:3})+'</div><h2 style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px">'+t('obT2')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);text-align:center;margin-bottom:14px">'+t('obS2')+'</p>'+jDetMsg+'<label class="lbl">'+t('obJD')+'</label><input class="inp" id="obJiraDom" value="tu-empresa.atlassian.net" style="margin-bottom:8px"><label class="lbl">'+t('obPr')+'</label><input class="inp" id="obJiraProj" value="PROJ" style="margin-bottom:8px"><button class="bs" style="margin-bottom:14px" data-act="connectJira"><span style="display:flex;align-items:center;gap:6px">'+lg.Jira+' '+t('obCA')+'</span> '+svgExtLink+'</button><div style="display:flex;gap:8px"><button class="bs" data-act="obN" data-arg="1">'+t('back')+'</button><button class="bp" data-act="obN" data-arg="3">'+t('cont')+'</button></div>';
   }else if(obS===3){
     let repoExtInfo='';
     if(detExts.gitlab||detExts.github){
       repoExtInfo='<div style="margin-bottom:10px" class="ext-badge">'+svgCheck+' '+(detExts.gitlab?'GitLab Workflow':'GitHub Pull Requests')+' detectado en VS Code</div>';
     }
-    c.innerHTML='<div style="text-align:center;font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px;font-weight:600">'+t('obS',{n:3,t:3})+'</div><h2 style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px">'+t('obT3')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);text-align:center;margin-bottom:14px">'+t('obS3')+'</p>'+repoExtInfo+'<label class="lbl">'+t('obPv')+'</label><select class="inp" id="repoPv" style="margin-bottom:8px"><option value="GitLab">GitLab</option><option value="GitHub">GitHub</option></select><label class="lbl">'+t('obRe')+'</label><input class="inp" id="repoName" value="tu-org/checkout-service" style="margin-bottom:8px"><button class="bs" style="margin-bottom:14px" onclick="connectRepo()"><span style="display:flex;align-items:center;gap:6px">'+svgExtLink+' Abrir repo en navegador</span></button><div style="display:flex;gap:8px"><button class="bs" onclick="obN(2)">'+t('back')+'</button><button class="bp" onclick="finOb()">'+t('obGo')+'</button></div>';
+    c.innerHTML='<div style="text-align:center;font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px;font-weight:600">'+t('obS',{n:3,t:3})+'</div><h2 style="font-size:16px;font-weight:700;text-align:center;margin-bottom:4px">'+t('obT3')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);text-align:center;margin-bottom:14px">'+t('obS3')+'</p>'+repoExtInfo+'<label class="lbl">'+t('obPv')+'</label><select class="inp" id="repoPv" style="margin-bottom:8px"><option value="GitLab">GitLab</option><option value="GitHub">GitHub</option></select><label class="lbl">'+t('obRe')+'</label><input class="inp" id="repoName" value="tu-org/checkout-service" style="margin-bottom:8px"><button class="bs" style="margin-bottom:14px" data-act="connectRepo"><span style="display:flex;align-items:center;gap:6px">'+svgExtLink+' Abrir repo en navegador</span></button><div style="display:flex;gap:8px"><button class="bs" data-act="obN" data-arg="2">'+t('back')+'</button><button class="bp" data-act="finOb">'+t('obGo')+'</button></div>';
   }
 }
 function connectJira(){
@@ -1210,8 +581,8 @@ function renderTaskCard(id) {
   const ssCount = tk.screenshots ? tk.screenshots.length : 2;
   const isMine = tk.assignedTo === 'me';
 
-  return '<div class="task-card" onclick="openTk(\'' + id + '\')" title="' + (L === 'es' ? 'Click para trabajar en tarea' : 'Click to work on task') + '">' +
-    '<button class="task-check-circle ' + (isDone ? 'checked' : '') + '" onclick="event.stopPropagation();toggleTaskComplete(\'' + id + '\')" title="' + (isDone ? (L === 'es' ? 'Reabrir tarea' : 'Reopen task') : (L === 'es' ? 'Marcar como completada' : 'Mark as completed')) + '">' +
+  return '<div class="task-card" data-act="openTk" data-arg="' + id + '" title="' + (L === 'es' ? 'Click para trabajar en tarea' : 'Click to work on task') + '">' +
+    '<button class="task-check-circle ' + (isDone ? 'checked' : '') + '" data-act="toggleTaskComplete" data-arg="' + id + '" data-stop="1" title="' + (isDone ? (L === 'es' ? 'Reabrir tarea' : 'Reopen task') : (L === 'es' ? 'Marcar como completada' : 'Mark as completed')) + '">' +
       (isDone ? svgCheck : '') +
     '</button>' +
     '<span class="badge" style="background:' + stBg + ';color:' + stCol + ';flex-shrink:0">' + status + '</span>' +
@@ -1231,7 +602,7 @@ function renderTaskCard(id) {
       '<span class="badge" style="background:var(--vscode-button-secondaryBackground, rgba(255,255,255,.06));color:var(--vscode-foreground);border:1px solid var(--vscode-panel-border);padding:3px 8px;font-size:11px;font-weight:500;display:flex;align-items:center;gap:4px">' +
         (L === 'es' ? 'Trabajar' : 'Work') + ' ' + svgChev +
       '</span>' +
-      '<button class="del-btn" onclick="event.stopPropagation();delTk(\'' + id + '\')" title="' + t('delTask') + '">' + svgDel + '</button>' +
+      '<button class="del-btn" data-act="delTk" data-arg="' + id + '" data-stop="1" title="' + t('delTask') + '">' + svgDel + '</button>' +
     '</div>' +
   '</div>';
 }
@@ -1257,9 +628,9 @@ function rHome(){
       h += '<h2 style="font-size:17px;font-weight:700;margin-bottom:6px">' + (L === 'es' ? 'Crea tu primera tarea o conecta tus herramientas' : 'Create your first task or connect') + '</h2>';
       h += '<p style="font-size:12px;color:var(--vscode-descriptionForeground);max-width:440px;margin:0 auto 20px;line-height:1.5">' + (L === 'es' ? 'No hay epicas ni tareas todavia. Puedes crear tu primera tarea localmente o conectar Jira y GitLab/GitHub para sincronizar tus tickets.' : 'No epics or tasks found yet. Create your first task locally or connect Jira and GitLab/GitHub to sync your tickets.') + '</p>';
       h += '<div style="display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap">';
-      h += '<button class="bp" style="width:auto;padding:7px 18px;font-size:12px" onclick="showScr(\'create\')">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera tarea' : 'Create your first task') + '</button>';
-      h += '<button class="bs" style="width:auto;padding:7px 16px;font-size:12px" onclick="openCreateEpic()">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera epica' : 'Create first epic') + '</button>';
-      h += '<button class="bs" style="width:auto;padding:7px 16px;font-size:12px" onclick="startOb()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> ' + (L === 'es' ? 'Conectar' : 'Connect') + '</button>';
+      h += '<button class="bp" style="width:auto;padding:7px 18px;font-size:12px" data-act="showScr" data-arg="create">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera tarea' : 'Create your first task') + '</button>';
+      h += '<button class="bs" style="width:auto;padding:7px 16px;font-size:12px" data-act="openCreateEpic">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera epica' : 'Create first epic') + '</button>';
+      h += '<button class="bs" style="width:auto;padding:7px 16px;font-size:12px" data-act="startOb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> ' + (L === 'es' ? 'Conectar' : 'Connect') + '</button>';
       h += '</div>';
       h += '</div>';
     } else {
@@ -1270,8 +641,8 @@ function rHome(){
       h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:2px">' + (epicKeys.length > 0 ? (L === 'es' ? 'Selecciona una epica para ver sus tareas' : 'Select an epic to view its tasks') : (L === 'es' ? 'Tareas del espacio de trabajo' : 'Workspace tasks')) + '</div>';
       h += '</div>';
       h += '<div style="display:flex;align-items:center;gap:6px">';
-      h += '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="openCreateEpic()">' + svgPlus + ' ' + (L === 'es' ? 'Nueva Epica' : 'New Epic') + '</button>';
-      h += '<button class="bp" style="width:auto;padding:6px 14px;font-size:12px" onclick="showScr(\'create\')">' + svgPlus + ' ' + t('newTask') + '</button>';
+      h += '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" data-act="openCreateEpic">' + svgPlus + ' ' + (L === 'es' ? 'Nueva Epica' : 'New Epic') + '</button>';
+      h += '<button class="bp" style="width:auto;padding:6px 14px;font-size:12px" data-act="showScr" data-arg="create">' + svgPlus + ' ' + t('newTask') + '</button>';
       h += '</div>';
       h += '</div>';
 
@@ -1286,7 +657,7 @@ function rHome(){
           const epProg = getEpicProgress(eid);
           const mstone = milestones[ep.milestoneId];
 
-          h += '<div class="epic-card" onclick="openEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Ver tareas de ' + (ep.name[L] || ep.name.es || ep.name) : 'View tasks for ' + (ep.name[L] || ep.name.en || ep.name)) + '">';
+          h += '<div class="epic-card" data-act="openEpic" data-arg="' + eid + '" title="' + (L === 'es' ? 'Ver tareas de ' + (ep.name[L] || ep.name.es || ep.name) : 'View tasks for ' + (ep.name[L] || ep.name.en || ep.name)) + '">';
           h += '<div style="display:flex;align-items:center;gap:12px">';
           h += '<span style="width:12px;height:12px;border-radius:3px;background:' + ep.color + ';flex-shrink:0"></span>';
           h += '<div style="flex:1;min-width:0">';
@@ -1304,8 +675,8 @@ function rHome(){
           h += '</div>';
           h += '</div>';
           h += '<div style="display:flex;align-items:center;gap:4px;flex-shrink:0">';
-          h += '<button class="del-btn" style="color:var(--vscode-descriptionForeground)" onclick="event.stopPropagation();editEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Editar epica' : 'Edit epic') + '">' + svgEdit + '</button>';
-          h += '<button class="del-btn" onclick="event.stopPropagation();deleteEpic(\'' + eid + '\')" title="' + (L === 'es' ? 'Eliminar epica' : 'Delete epic') + '">' + svgDel + '</button>';
+          h += '<button class="del-btn" style="color:var(--vscode-descriptionForeground)" data-act="editEpic" data-arg="' + eid + '" data-stop="1" title="' + (L === 'es' ? 'Editar epica' : 'Edit epic') + '">' + svgEdit + '</button>';
+          h += '<button class="del-btn" data-act="deleteEpic" data-arg="' + eid + '" data-stop="1" title="' + (L === 'es' ? 'Eliminar epica' : 'Delete epic') + '">' + svgDel + '</button>';
           h += '<span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600;margin-left:4px">' + (L === 'es' ? 'Ver' : 'View') + '</span>';
           h += svgChev;
           h += '</div>';
@@ -1330,7 +701,7 @@ function rHome(){
     const epTasks = allIds.filter(id => tasks[id].epicId === selectedEpicId);
 
     h += '<div style="margin-bottom:14px">';
-    h += '<button class="bs" style="width:auto;display:inline-flex;padding:5px 12px;font-size:12px;margin-bottom:10px" onclick="closeEpic()">';
+    h += '<button class="bs" style="width:auto;display:inline-flex;padding:5px 12px;font-size:12px;margin-bottom:10px" data-act="closeEpic">';
     h += svgBack + ' ' + (L === 'es' ? 'Volver al listado de Epicas' : 'Back to Epics list');
     h += '</button>';
     
@@ -1344,9 +715,9 @@ function rHome(){
     h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:4px">' + (ep.summary[L] || ep.summary.es || ep.summary) + (ep.lead ? ' · <em>' + ep.lead + '</em>' : '') + '</div>';
     h += '</div>';
     h += '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">';
-    h += '<button class="bs" style="width:auto;padding:5px 10px;font-size:11px" onclick="editEpic(\'' + selectedEpicId + '\')" title="' + (L === 'es' ? 'Editar epica' : 'Edit epic') + '">' + svgEdit + ' ' + (L === 'es' ? 'Editar' : 'Edit') + '</button>';
-    h += '<button class="del-btn" onclick="deleteEpic(\'' + selectedEpicId + '\')" title="' + (L === 'es' ? 'Eliminar epica' : 'Delete epic') + '">' + svgDel + '</button>';
-    h += '<button class="bp" style="width:auto;padding:6px 12px;font-size:12px" onclick="createTaskInEpic(\'' + selectedEpicId + '\')">';
+    h += '<button class="bs" style="width:auto;padding:5px 10px;font-size:11px" data-act="editEpic" data-arg="' + selectedEpicId + '" title="' + (L === 'es' ? 'Editar epica' : 'Edit epic') + '">' + svgEdit + ' ' + (L === 'es' ? 'Editar' : 'Edit') + '</button>';
+    h += '<button class="del-btn" data-act="deleteEpic" data-arg="' + selectedEpicId + '" title="' + (L === 'es' ? 'Eliminar epica' : 'Delete epic') + '">' + svgDel + '</button>';
+    h += '<button class="bp" style="width:auto;padding:6px 12px;font-size:12px" data-act="createTaskInEpic" data-arg="' + selectedEpicId + '">';
     h += svgPlus + ' ' + t('newTask');
     h += '</button>';
     h += '</div>';
@@ -1361,7 +732,7 @@ function rHome(){
     if (epTasks.length === 0) {
       h += '<div style="text-align:center;padding:30px 10px;color:var(--vscode-descriptionForeground)">';
       h += '<p style="font-size:13px;margin-bottom:8px">' + (L === 'es' ? 'No hay tareas creadas en esta epica todavia.' : 'No tasks created in this epic yet.') + '</p>';
-      h += '<button class="bp" style="display:inline-flex;width:auto;padding:6px 14px;font-size:12px" onclick="createTaskInEpic(\'' + selectedEpicId + '\')">' + svgPlus + ' ' + t('newTask') + '</button>';
+      h += '<button class="bp" style="display:inline-flex;width:auto;padding:6px 14px;font-size:12px" data-act="createTaskInEpic" data-arg="' + selectedEpicId + '">' + svgPlus + ' ' + t('newTask') + '</button>';
       h += '</div>';
     } else {
       epTasks.forEach(id => {
@@ -1396,7 +767,7 @@ function rCreateEpic(){
     : (L === 'es' ? 'Crear Nueva Epica' : 'Create New Epic');
 
   let h = '<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px;background:var(--vscode-sideBar-background)">' +
-    '<button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">' +
+    '<button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" data-act="showScr" data-arg="home">' +
       svgBack + (L === 'es' ? 'Epicas' : 'Epics') +
     '</button>' +
     '<span style="color:var(--vscode-panel-border)">/</span>' +
@@ -1435,8 +806,8 @@ function rCreateEpic(){
   selectedEpicColor = '#0969da';
 
   h += '<div style="display:flex;gap:10px">';
-  h += '<button class="bs" onclick="showScr(\'home\')">' + (L === 'es' ? 'Cancelar' : 'Cancel') + '</button>';
-  h += '<button class="bp" onclick="saveEpicForm()">' + (isEdit ? (L === 'es' ? 'Guardar Cambios' : 'Save Changes') : (L === 'es' ? 'Crear Epica' : 'Create Epic')) + '</button>';
+  h += '<button class="bs" data-act="showScr" data-arg="home">' + (L === 'es' ? 'Cancelar' : 'Cancel') + '</button>';
+  h += '<button class="bp" data-act="saveEpicForm">' + (isEdit ? (L === 'es' ? 'Guardar Cambios' : 'Save Changes') : (L === 'es' ? 'Crear Epica' : 'Create Epic')) + '</button>';
   h += '</div>';
 
   h += '</div>';
@@ -1511,7 +882,7 @@ let newCriteria=[];
 function rCreate(){
   newCriteria=[''];
   const el=document.getElementById('sCreate');
-  el.innerHTML='<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px;background:var(--vscode-sideBar-background)"><button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">'+svgBack+t('tsk')+'</button><span style="color:var(--vscode-panel-border)">/</span><span style="font-weight:600">'+t('crTitle')+'</span></div><div class="ctr fi" id="crForm"></div>';
+  el.innerHTML='<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px;background:var(--vscode-sideBar-background)"><button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" data-act="showScr" data-arg="home">'+svgBack+t('tsk')+'</button><span style="color:var(--vscode-panel-border)">/</span><span style="font-weight:600">'+t('crTitle')+'</span></div><div class="ctr fi" id="crForm"></div>';
   rCreateForm();
 }
 function rCreateForm(){
@@ -1526,14 +897,14 @@ function rCreateForm(){
   }
   h += '<div style="margin-bottom:10px"><label class="lbl">' + t('epicLbl') + ' & ' + t('milestoneLbl') + '</label><select class="inp" id="nEpic">' + epOpts + '</select></div>';
   h+='<label class="lbl">'+t('crCritF')+'</label><div id="critList"></div>';
-  h+='<button class="bs" style="margin-bottom:14px;font-size:12px;padding:6px" onclick="addCrit()">'+svgPlus+' '+t('crAdd')+'</button>';
-  h+='<div style="display:flex;gap:8px"><button class="bs" onclick="showScr(\'home\')">'+t('crCancel')+'</button><button class="bp" onclick="saveNewTask()">'+t('crSave')+'</button></div>';
+  h+='<button class="bs" style="margin-bottom:14px;font-size:12px;padding:6px" data-act="addCrit">'+svgPlus+' '+t('crAdd')+'</button>';
+  h+='<div style="display:flex;gap:8px"><button class="bs" data-act="showScr" data-arg="home">'+t('crCancel')+'</button><button class="bp" data-act="saveNewTask">'+t('crSave')+'</button></div>';
   c.innerHTML=h;
   rCritList();
 }
 function rCritList(){
   const c=document.getElementById('critList');if(!c)return;
-  c.innerHTML=newCriteria.map((v,i)=>'<div class="crit-row"><input class="inp" value="'+v.replace(/"/g,'&quot;')+'" oninput="newCriteria['+i+']=this.value" placeholder="'+(L==='es'?'Criterio '+(i+1):'Criterion '+(i+1))+'"><button onclick="rmCrit('+i+')">'+svgX+'</button></div>').join('');
+  c.innerHTML=newCriteria.map((v,i)=>'<div class="crit-row"><input class="inp" value="'+v.replace(/"/g,'&quot;')+'" data-input="setCrit" data-idx="'+i+'" placeholder="'+(L==='es'?'Criterio '+(i+1):'Criterion '+(i+1))+'"><button data-act="rmCrit" data-arg="' + i + '">'+svgX+'</button></div>').join('');
 }
 function addCrit(){newCriteria.push('');rCritList()}
 function rmCrit(i){newCriteria.splice(i,1);if(newCriteria.length===0)newCriteria=[''];rCritList()}
@@ -1573,7 +944,7 @@ function rTk(){
   const tk=tasks[aTk];if(!tk)return;
   const total=gSt(tk);
   const isDoneTk = (tk.status[L] || tk.status.es || tk.status.en || tk.status || '').toLowerCase().includes('complet') || (tk.status[L] || tk.status.es || tk.status.en || tk.status || '').toLowerCase().includes('done');
-  let h='<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;justify-content:space-between;font-size:12px;background:var(--vscode-sideBar-background)"><div style="display:flex;align-items:center;gap:6px"><button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">'+svgBack+t('tsk')+'</button><span style="color:var(--vscode-panel-border)">/</span><span style="font-weight:700;color:var(--vscode-textLink-foreground);font-family:monospace">'+aTk+'</span><span class="badge" style="background:rgba(139,92,246,.12);color:#a78bfa">'+{story:'Story',bug:'Bug',spike:'Spike'}[tk.type]+'</span><button class="bs" style="width:auto;padding:2px 8px;font-size:11px;' + (isDoneTk ? 'border-color:#10b981;color:#10b981' : '') + '" onclick="toggleTaskComplete(\'' + aTk + '\')">' + (isDoneTk ? svgCheck + ' ' + (L === 'es' ? 'Completada' : 'Completed') : (L === 'es' ? 'Marcar completada' : 'Mark done')) + '</button></div><div style="display:flex;align-items:center;gap:4px">';
+  let h='<div style="padding:8px 16px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;justify-content:space-between;font-size:12px;background:var(--vscode-sideBar-background)"><div style="display:flex;align-items:center;gap:6px"><button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" data-act="showScr" data-arg="home">'+svgBack+t('tsk')+'</button><span style="color:var(--vscode-panel-border)">/</span><span style="font-weight:700;color:var(--vscode-textLink-foreground);font-family:monospace">'+aTk+'</span><span class="badge" style="background:rgba(139,92,246,.12);color:#a78bfa">'+{story:'Story',bug:'Bug',spike:'Spike'}[tk.type]+'</span><button class="bs" style="width:auto;padding:2px 8px;font-size:11px;' + (isDoneTk ? 'border-color:#10b981;color:#10b981' : '') + '" data-act="toggleTaskComplete" data-arg="' + aTk + '">' + (isDoneTk ? svgCheck + ' ' + (L === 'es' ? 'Completada' : 'Completed') : (L === 'es' ? 'Marcar completada' : 'Mark done')) + '</button></div><div style="display:flex;align-items:center;gap:4px">';
   for(let i=1;i<=total;i++){if(i>1)h+='<div style="width:10px;height:1px;background:var(--vscode-panel-border)"></div>';h+='<div class="sd '+(i<cS?'sd-d':i===cS?'sd-a':'sd-p')+'"></div>'}
   h+='</div></div><div class="ctr fi" id="sC"></div>';
   document.getElementById('sTk').innerHTML=h;
@@ -1587,7 +958,7 @@ function rSC(){
 
   if(cS===1){
     let fig='';if(tk.figma)fig='<div class="card card-bg" style="padding:0;overflow:hidden"><div style="padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px">'+lg.Figma+'<strong>'+t('fig')+'</strong></div><div style="padding:12px;display:flex;justify-content:center;background:#1a1a20"><div style="width:100%;max-width:320px;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.3)"><div style="background:#f1f5f9;padding:6px 8px;font-size:11px;color:#64748b;font-weight:700">Mockup</div><div style="padding:8px;display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;font-weight:700;color:#0f172a">'+(L==='es'?'Historial':'History')+'</span><div style="border:1px solid #93c5fd;border-radius:4px;padding:3px 6px;background:#eff6ff;font-size:10px;color:#2563eb;font-weight:600">'+(L==='es'?'7 dias':'7 days')+'</div></div></div></div></div>';
-    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 1</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+ti+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+(sp?(L==='es'?'Ticket de investigacion. Lee el objetivo.':'Investigation ticket. Read the objective.'):(L==='es'?'Lee los detalles y pedi a '+activeAi+' que empiece.':'Read the details and ask '+activeAi+' to start.'))+'</p><div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+t(sp?'spO':'wh')+'</div><p style="font-size:13px;line-height:1.5">'+de+'</p></div>'+fig+'<div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+t(sp?'spD':'crit')+'</div><div style="display:flex;flex-direction:column;gap:6px">'+cr.map(x=>'<div style="display:flex;align-items:center;gap:8px;font-size:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-descriptionForeground)" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'+x+'</div>').join('')+'</div></div><button class="bp" onclick="startAiWithTicket()">'+svgChat+' '+(sp?(L==='es'?'Investigar con '+activeAi:'Investigate with '+activeAi):(L==='es'?'Pedile a '+activeAi+' que empiece':'Ask '+activeAi+' to start'))+'</button><p style="text-align:center;font-size:11px;color:var(--vscode-descriptionForeground);margin-top:6px">'+(L==='es'?'Se abre el chat de '+activeAi+' con el contexto cargado.':'Opens '+activeAi+' chat with context loaded.')+'</p>';
+    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 1</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+ti+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+(sp?(L==='es'?'Ticket de investigacion. Lee el objetivo.':'Investigation ticket. Read the objective.'):(L==='es'?'Lee los detalles y pedi a '+activeAi+' que empiece.':'Read the details and ask '+activeAi+' to start.'))+'</p><div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+t(sp?'spO':'wh')+'</div><p style="font-size:13px;line-height:1.5">'+de+'</p></div>'+fig+'<div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+t(sp?'spD':'crit')+'</div><div style="display:flex;flex-direction:column;gap:6px">'+cr.map(x=>'<div style="display:flex;align-items:center;gap:8px;font-size:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-descriptionForeground)" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'+x+'</div>').join('')+'</div></div><button class="bp" data-act="startAiWithTicket">'+svgChat+' '+(sp?(L==='es'?'Investigar con '+activeAi:'Investigate with '+activeAi):(L==='es'?'Pedile a '+activeAi+' que empiece':'Ask '+activeAi+' to start'))+'</button><p style="text-align:center;font-size:11px;color:var(--vscode-descriptionForeground);margin-top:6px">'+(L==='es'?'Se abre el chat de '+activeAi+' con el contexto cargado.':'Opens '+activeAi+' chat with context loaded.')+'</p>';
   }
   else if(cS===2){
     const fullPrompt = buildTicketPrompt(tk, aTk);
@@ -1597,7 +968,7 @@ function rSC(){
     '<div class="card" style="border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05);margin-bottom:12px">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'+
         '<div style="display:flex;align-items:center;gap:6px;font-weight:600;color:#10b981;font-size:12px">'+svgCheck+'<span>'+(L==='es'?'Prompt copiado y listo para '+activeAi:'Prompt copied and ready for '+activeAi)+'</span></div>'+
-        '<button class="bs" style="width:auto;padding:3px 8px;font-size:11px" onclick="reopenChat()">'+svgChat+' '+(L==='es'?'Reabrir chat de '+activeAi:'Reopen '+activeAi+' chat')+'</button>'+
+        '<button class="bs" style="width:auto;padding:3px 8px;font-size:11px" data-act="reopenChat">'+svgChat+' '+(L==='es'?'Reabrir chat de '+activeAi:'Reopen '+activeAi+' chat')+'</button>'+
       '</div>'+
       '<p style="font-size:11px;color:var(--vscode-descriptionForeground)">'+aTk+' — '+cr.length+' '+(L==='es'?'criterios incluidos':'criteria included')+'</p>'+
     '</div>'+
@@ -1605,42 +976,42 @@ function rSC(){
     '<div class="card card-bg" style="margin-bottom:14px">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
         '<div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin:0">'+(L==='es'?'Prompt para tu asistente':'Prompt for your assistant')+'</div>'+
-        '<button class="bs" style="width:auto;padding:3px 8px;font-size:11px" onclick="cpFullPrompt()">'+svgCopy+' '+(L==='es'?'Copiar de nuevo':'Copy again')+'</button>'+
+        '<button class="bs" style="width:auto;padding:3px 8px;font-size:11px" data-act="cpFullPrompt">'+svgCopy+' '+(L==='es'?'Copiar de nuevo':'Copy again')+'</button>'+
       '</div>'+
       '<div style="background:var(--vscode-input-background);border:1px solid var(--vscode-input-border);border-radius:6px;padding:8px;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:120px;overflow-y:auto;color:var(--vscode-input-foreground);line-height:1.4" id="fullPromptBox">'+fullPrompt.replace(/</g,'&lt;')+'</div>'+
     '</div>'+
 
     '<div style="font-size:12px;font-weight:600;color:var(--vscode-descriptionForeground);margin-bottom:6px">'+t('sugL')+'</div>'+
-    pr.map(p=>'<button class="pb" onclick="cpP(this,\''+p.replace(/'/g,"\\'")+'\')"><span>'+p+'</span>'+svgCopy+'</button>').join('')+
-    '<div style="margin-top:14px"><button class="bp" onclick="goS(3)">'+svgCheck+' '+(sp?t('aiDD'):t('aiDT'))+'</button></div>';
+    pr.map(p=>'<button class="pb" data-act="cpP" data-arg="'+attrEncode(p)+'"><span>'+p+'</span>'+svgCopy+'</button>').join('')+
+    '<div style="margin-top:14px"><button class="bp" data-act="goS" data-arg="3">'+svgCheck+' '+(sp?t('aiDD'):t('aiDT'))+'</button></div>';
   }
   else if(cS===3&&sp){
     const initJira = buildJiraReviewComment(tk, aTk);
     c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 3</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t('docT')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+t('docS')+'</p>'+
     '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">'+
-      '<button class="pb" onclick="toast(\'Creating...\')">'+lg.Confluence+'<span style="flex:1;text-align:left">'+t('cConf')+'</span></button>'+
-      '<button class="pb" onclick="toast(\'Creating...\')">'+lg.Notion+'<span style="flex:1;text-align:left">'+t('cNot')+'</span></button>'+
-      '<button class="pb" onclick="toast(\'Creating...\')">'+lg.OpenSpec+'<span style="flex:1;text-align:left">'+t('cOS')+'</span></button>'+
+      '<button class="pb" data-act="toast" data-arg="Creating...">'+lg.Confluence+'<span style="flex:1;text-align:left">'+t('cConf')+'</span></button>'+
+      '<button class="pb" data-act="toast" data-arg="Creating...">'+lg.Notion+'<span style="flex:1;text-align:left">'+t('cNot')+'</span></button>'+
+      '<button class="pb" data-act="toast" data-arg="Creating...">'+lg.OpenSpec+'<span style="flex:1;text-align:left">'+t('cOS')+'</span></button>'+
     '</div>'+
     '<div class="card card-bg">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
         '<label class="lbl" style="margin:0">'+t('jCom')+'</label>'+
-        '<button class="bs" style="width:auto;padding:2px 8px;font-size:11px" onclick="toggleJiraPreview(\'spike\')" id="pBtnSpike">'+(L==='es'?'Vista previa':'Preview')+'</button>'+
+        '<button class="bs" style="width:auto;padding:2px 8px;font-size:11px" data-act="toggleJiraPreview" data-arg="spike" id="pBtnSpike">'+(L==='es'?'Vista previa':'Preview')+'</button>'+
       '</div>'+
       '<div class="md-toolbar">'+
-        '<button onclick="insertMd(\'spike\',\'bold\')">B</button>'+
-        '<button onclick="insertMd(\'spike\',\'italic\')">I</button>'+
-        '<button onclick="insertMd(\'spike\',\'code\')">Code</button>'+
-        '<button onclick="insertMd(\'spike\',\'list\')">Lista</button>'+
-        '<button onclick="insertMd(\'spike\',\'check\')">Check</button>'+
-        '<button onclick="insertMd(\'spike\',\'h3\')">H3</button>'+
+        '<button data-act="insertMd" data-arg="spike" data-arg2="bold">B</button>'+
+        '<button data-act="insertMd" data-arg="spike" data-arg2="italic">I</button>'+
+        '<button data-act="insertMd" data-arg="spike" data-arg2="code">Code</button>'+
+        '<button data-act="insertMd" data-arg="spike" data-arg2="list">Lista</button>'+
+        '<button data-act="insertMd" data-arg="spike" data-arg2="check">Check</button>'+
+        '<button data-act="insertMd" data-arg="spike" data-arg2="h3">H3</button>'+
         '<span style="flex:1"></span>'+
-        '<button onclick="resetJiraComment(\'spike\')">'+(L==='es'?'Restablecer':'Reset')+'</button>'+
+        '<button data-act="resetJiraComment" data-arg="spike">'+(L==='es'?'Restablecer':'Reset')+'</button>'+
       '</div>'+
       '<textarea class="inp md-editor" id="jiraCommentSpike" rows="6" style="resize:vertical"></textarea>'+
       '<div id="jiraPreviewSpike" class="md-preview" style="display:none"></div>'+
     '</div>'+
-    '<button class="bp" style="background:#10b981" onclick="goS(4)">'+t('pubCl')+'</button>';
+    '<button class="bp" style="background:#10b981" data-act="goS" data-arg="4">'+t('pubCl')+'</button>';
 
     setTimeout(()=>{
       const ta = document.getElementById('jiraCommentSpike');
@@ -1660,8 +1031,8 @@ function rSC(){
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
         '<div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin:0">'+t('aiTst')+'</div>'+
         '<div style="display:flex;gap:6px">'+
-          '<button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" onclick="runTermTests()">'+(L==='es'?'En terminal':'In terminal')+'</button>'+
-          '<button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" onclick="rerunTestsVisual()">'+t('rerun')+'</button>'+
+          '<button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" data-act="runTermTests">'+(L==='es'?'En terminal':'In terminal')+'</button>'+
+          '<button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" data-act="rerunTestsVisual">'+t('rerun')+'</button>'+
         '</div>'+
       '</div>'+
       '<div id="testsListContainer">'+
@@ -1681,13 +1052,13 @@ function rSC(){
       '</div>'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">'+
         '<div style="font-size:11px;color:#10b981;font-weight:600" id="testsPassCounter">'+t('tPas',{n:passedCount,t:passedCount})+'</div>'+
-        '<button class="bs" style="width:auto;padding:3px 10px;font-size:11px;border-style:dashed" onclick="generateMoreTests()">'+svgSparkle+' '+t('genMoreTests')+'</button>'+
+        '<button class="bs" style="width:auto;padding:3px 10px;font-size:11px;border-style:dashed" data-act="generateMoreTests">'+svgSparkle+' '+t('genMoreTests')+'</button>'+
       '</div>'+
     '</div>'+
     '<div class="card card-bg">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
         '<div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin:0">'+t('autoSS')+' (Playwright E2E)</div>'+
-        '<button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" onclick="generateMoreScreenshots()">'+svgPlus+' '+t('genMoreSS')+'</button>'+
+        '<button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" data-act="generateMoreScreenshots">'+svgPlus+' '+t('genMoreSS')+'</button>'+
       '</div>'+
       '<div class="ss-grid" id="step3SsGrid">'+
         ssList.map(s=>'<div class="ss-card">'+
@@ -1714,8 +1085,8 @@ function rSC(){
         '</div>'+
       '</div>'+
     '</div>'+
-    '<button class="bp" onclick="goS(4)" style="margin-top:4px">'+t('allG')+'</button>'+
-    '<button class="bs" onclick="goS(2)" style="margin-top:6px">'+t('smW')+'</button>';
+    '<button class="bp" data-act="goS" data-arg="4" style="margin-top:4px">'+t('allG')+'</button>'+
+    '<button class="bs" data-act="goS" data-arg="2" style="margin-top:6px">'+t('smW')+'</button>';
   }
   else if(cS===4&&sp){sDone(t('spMsg'))}
   else if(cS===4&&!sp){
@@ -1747,31 +1118,31 @@ function rSC(){
               '<span style="font-size:10px;color:#10b981;font-weight:600;display:inline-flex;align-items:center;gap:3px">'+svgCheck+' '+(L==='es'?'Auto-captura':'Auto-capture')+'</span>'+
             '</div>'+
           '</div>'+
-          '<button class="del-btn" onclick="removeScreenshot('+idx+')" title="'+t('delTask')+'">'+svgDel+'</button>'+
+          '<button class="del-btn" data-act="removeScreenshot" data-arg="' + idx + '" title="'+t('delTask')+'">'+svgDel+'</button>'+
         '</div>').join('')+
       '</div>'+
       '<div style="display:flex;gap:8px;margin-bottom:10px">'+
-        '<button class="bs" style="flex:1;border-style:dashed;font-size:12px;padding:8px" onclick="addSS()">'+svgCam+' '+t('addSS')+'</button>'+
-        '<button class="bs" style="flex:1;border-style:dashed;font-size:12px;padding:8px" onclick="generateMoreScreenshots()">'+svgPlus+' '+t('genMoreSS')+'</button>'+
+        '<button class="bs" style="flex:1;border-style:dashed;font-size:12px;padding:8px" data-act="addSS">'+svgCam+' '+t('addSS')+'</button>'+
+        '<button class="bs" style="flex:1;border-style:dashed;font-size:12px;padding:8px" data-act="generateMoreScreenshots">'+svgPlus+' '+t('genMoreSS')+'</button>'+
       '</div>'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px">'+
         '<label class="lbl" style="margin:0">'+t('jCom')+'</label>'+
-        '<button class="bs" style="width:auto;padding:2px 8px;font-size:11px" onclick="toggleJiraPreview(\'story\')" id="pBtnStory">'+(L==='es'?'Vista previa':'Preview')+'</button>'+
+        '<button class="bs" style="width:auto;padding:2px 8px;font-size:11px" data-act="toggleJiraPreview" data-arg="story" id="pBtnStory">'+(L==='es'?'Vista previa':'Preview')+'</button>'+
       '</div>'+
       '<div class="md-toolbar">'+
-        '<button onclick="insertMd(\'story\',\'bold\')">B</button>'+
-        '<button onclick="insertMd(\'story\',\'italic\')">I</button>'+
-        '<button onclick="insertMd(\'story\',\'code\')">Code</button>'+
-        '<button onclick="insertMd(\'story\',\'list\')">Lista</button>'+
-        '<button onclick="insertMd(\'story\',\'check\')">Check</button>'+
-        '<button onclick="insertMd(\'story\',\'h3\')">H3</button>'+
+        '<button data-act="insertMd" data-arg="story" data-arg2="bold">B</button>'+
+        '<button data-act="insertMd" data-arg="story" data-arg2="italic">I</button>'+
+        '<button data-act="insertMd" data-arg="story" data-arg2="code">Code</button>'+
+        '<button data-act="insertMd" data-arg="story" data-arg2="list">Lista</button>'+
+        '<button data-act="insertMd" data-arg="story" data-arg2="check">Check</button>'+
+        '<button data-act="insertMd" data-arg="story" data-arg2="h3">H3</button>'+
         '<span style="flex:1"></span>'+
-        '<button onclick="resetJiraComment(\'story\')">'+(L==='es'?'Restablecer':'Reset')+'</button>'+
+        '<button data-act="resetJiraComment" data-arg="story">'+(L==='es'?'Restablecer':'Reset')+'</button>'+
       '</div>'+
       '<textarea class="inp md-editor" id="jiraCommentStory" rows="7" style="resize:vertical"></textarea>'+
       '<div id="jiraPreviewStory" class="md-preview" style="display:none"></div>'+
     '</div>'+
-    '<button class="bp" onclick="goS(5)">'+t('upMR')+'</button>';
+    '<button class="bp" data-act="goS" data-arg="5">'+t('upMR')+'</button>';
 
     setTimeout(()=>{
       const ta = document.getElementById('jiraCommentStory');
@@ -1784,11 +1155,11 @@ function rSC(){
     const branchName = localGitState.hasGit ? localGitState.branch : ('feature/' + aTk.toLowerCase());
     const isLocalFlow = isLocalMode || !hasRemote;
 
-    let gitSection = '';
+    let gitSection;
     if (!localGitState.hasGit) {
       gitSection = '<div class="card card-bg" style="margin-bottom:12px;border-color:var(--vscode-panel-border)">' +
         '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:8px">' + t('noGitFolder') + '</div>' +
-        '<button class="bs" style="width:auto;padding:6px 12px;font-size:11.5px" onclick="initGitInWorkspace()">' + svgTerm + ' ' + t('initGitBtn') + '</button>' +
+        '<button class="bs" style="width:auto;padding:6px 12px;font-size:11.5px" data-act="initGitInWorkspace">' + svgTerm + ' ' + t('initGitBtn') + '</button>' +
       '</div>';
     } else {
       gitSection = '<div class="card card-bg" style="margin-bottom:12px;border-color:var(--vscode-panel-border)">' +
@@ -1804,9 +1175,9 @@ function rSC(){
     }
 
     let actionsH = '';
-    actionsH += '<button class="bp" style="margin-bottom:8px" onclick="doLocalCommit()">' + svgCheck + ' ' + t('commitLocalBtn') + '</button>';
+    actionsH += '<button class="bp" style="margin-bottom:8px" data-act="doLocalCommit">' + svgCheck + ' ' + t('commitLocalBtn') + '</button>';
     if (hasRemote) {
-      actionsH += '<button class="bs" onclick="doMR()">' + (cTools.includes('GitLab') ? lg.GitLab : lg.GitHub) + ' ' + t('crMR') + '</button>';
+      actionsH += '<button class="bs" data-act="doMR">' + (cTools.includes('GitLab') ? lg.GitLab : lg.GitHub) + ' ' + t('crMR') + '</button>';
     }
 
     c.innerHTML = '<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">' + t('stp') + ' 5</span></div>' +
@@ -1830,7 +1201,7 @@ function sDone(msg){
     tk.color = 'green';
     saveTasks();
   }
-  document.getElementById('sC').innerHTML='<div style="text-align:center;padding:24px 0" class="fi"><div style="width:48px;height:48px;border-radius:50%;background:rgba(16,185,129,.1);display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></div><h2 style="font-size:16px;font-weight:700;margin-bottom:6px">'+t('tDone')+'</h2><p style="font-size:13px;color:var(--vscode-descriptionForeground);margin-bottom:4px">'+aTk+' · '+(tk.title[L]||tk.title.es||tk.title.en||tk.title)+'</p><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:18px">'+msg+'</p><button class="bs" style="width:auto;display:inline-flex;padding:8px 20px" onclick="showScr(\'home\')">'+t('nxtT')+'</button></div>';
+  document.getElementById('sC').innerHTML='<div style="text-align:center;padding:24px 0" class="fi"><div style="width:48px;height:48px;border-radius:50%;background:rgba(16,185,129,.1);display:flex;align-items:center;justify-content:center;margin:0 auto 12px"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg></div><h2 style="font-size:16px;font-weight:700;margin-bottom:6px">'+t('tDone')+'</h2><p style="font-size:13px;color:var(--vscode-descriptionForeground);margin-bottom:4px">'+aTk+' · '+(tk.title[L]||tk.title.es||tk.title.en||tk.title)+'</p><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:18px">'+msg+'</p><button class="bs" style="width:auto;display:inline-flex;padding:8px 20px" data-act="showScr" data-arg="home">'+t('nxtT')+'</button></div>';
 }
 function buildTicketPrompt(tk, id){
   const isSpike = tk.type === 'spike';
@@ -2006,8 +1377,8 @@ let dockerContainers = [];
 function rEnv(){
   const el = document.getElementById('sEnv');
   if (!el) return;
-  let statusBadge = '';
-  let statusCard = '';
+  let statusBadge;
+  let statusCard;
 
   if (dockerStatus.running) {
     statusBadge = '<span class="badge" style="background:rgba(16,185,129,.15);color:#10b981">'+t('docRun')+'</span>';
@@ -2027,8 +1398,8 @@ function rEnv(){
       '</div>'+
       '<p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:12px">'+t('docNotRunDesc')+'</p>'+
       '<div style="display:flex;gap:8px">'+
-        '<button class="bp" onclick="startDockerApp()">'+svgPlay+' '+t('docStart')+'</button>'+
-        '<button class="bs" onclick="refreshDocker()">'+t('checkAgain')+'</button>'+
+        '<button class="bp" data-act="startDockerApp">'+svgPlay+' '+t('docStart')+'</button>'+
+        '<button class="bs" data-act="refreshDocker">'+t('checkAgain')+'</button>'+
       '</div>'+
     '</div>';
   } else {
@@ -2040,15 +1411,15 @@ function rEnv(){
       '</div>'+
       '<p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:12px">'+t('docInstDesc')+'</p>'+
       '<div style="display:flex;flex-direction:column;gap:8px">'+
-        '<button class="bp" onclick="installDockerBrew()">'+svgTerm+' '+t('docInst')+'</button>'+
-        '<button class="bs" onclick="openDockerDownload()">'+svgExtLink+' '+t('docDwn')+'</button>'+
+        '<button class="bp" data-act="installDockerBrew">'+svgTerm+' '+t('docInst')+'</button>'+
+        '<button class="bs" data-act="openDockerDownload">'+svgExtLink+' '+t('docDwn')+'</button>'+
       '</div>'+
     '</div>';
   }
 
   let h = '<div class="ctr fi">';
   h += '<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:12px">'+
-    '<button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" onclick="showScr(\'home\')">'+svgBack+t('back')+'</button>'+
+    '<button style="background:none;border:none;color:var(--vscode-descriptionForeground);cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px" data-act="showScr" data-arg="home">'+svgBack+t('back')+'</button>'+
     '<span style="color:var(--vscode-panel-border)">/</span>'+
     '<span style="font-weight:600">'+t('envT')+'</span>'+
   '</div>';
@@ -2067,7 +1438,7 @@ function rEnv(){
       lg.PostgreSQL +
       '<div><div style="font-size:13px;font-weight:600">PostgreSQL (v16)</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">localhost:5432 · postgres / postgres</div></div>'+
     '</div>'+
-    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="launchService(\'postgres\')">'+svgPlay+' '+(L==='es'?'Iniciar':'Start')+'</button>'+
+    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" data-act="launchService" data-arg="postgres">'+svgPlay+' '+(L==='es'?'Iniciar':'Start')+'</button>'+
   '</div>';
 
   // MySQL
@@ -2076,7 +1447,7 @@ function rEnv(){
       lg.MySQL +
       '<div><div style="font-size:13px;font-weight:600">MySQL (v8)</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">localhost:3306 · root / mysql</div></div>'+
     '</div>'+
-    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="launchService(\'mysql\')">'+svgPlay+' '+(L==='es'?'Iniciar':'Start')+'</button>'+
+    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" data-act="launchService" data-arg="mysql">'+svgPlay+' '+(L==='es'?'Iniciar':'Start')+'</button>'+
   '</div>';
 
   // Redis
@@ -2085,7 +1456,7 @@ function rEnv(){
       svgRedis +
       '<div><div style="font-size:13px;font-weight:600">Redis</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">localhost:6379 · Cache & KV</div></div>'+
     '</div>'+
-    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="launchService(\'redis\')">'+svgPlay+' '+(L==='es'?'Iniciar':'Start')+'</button>'+
+    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" data-act="launchService" data-arg="redis">'+svgPlay+' '+(L==='es'?'Iniciar':'Start')+'</button>'+
   '</div>';
 
   // Full App Compose
@@ -2094,11 +1465,11 @@ function rEnv(){
       lg.Docker +
       '<div><div style="font-size:13px;font-weight:600">'+t('startComp')+'</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">docker compose up -d</div></div>'+
     '</div>'+
-    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" onclick="launchService(\'compose\')">'+svgPlay+' '+(L==='es'?'Levantar':'Up')+'</button>'+
+    '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" data-act="launchService" data-arg="compose">'+svgPlay+' '+(L==='es'?'Levantar':'Up')+'</button>'+
   '</div>';
 
   // Active containers
-  h += '<div style="font-size:13px;font-weight:700;margin:18px 0 8px;display:flex;align-items:center;justify-content:space-between"><span>'+t('actCont')+' ('+dockerContainers.length+')</span><button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" onclick="refreshDocker()">'+t('checkAgain')+'</button></div>';
+  h += '<div style="font-size:13px;font-weight:700;margin:18px 0 8px;display:flex;align-items:center;justify-content:space-between"><span>'+t('actCont')+' ('+dockerContainers.length+')</span><button style="background:none;border:none;color:var(--vscode-textLink-foreground);font-size:11px;cursor:pointer;font-weight:600" data-act="refreshDocker">'+t('checkAgain')+'</button></div>';
   if (dockerContainers.length === 0) {
     h += '<p style="font-size:12px;color:var(--vscode-descriptionForeground);padding:10px 0">'+t('noCont')+'</p>';
   } else {
@@ -2113,7 +1484,7 @@ function rEnv(){
           '</div>'+
           '<div style="font-size:11px;color:var(--vscode-descriptionForeground);margin-top:2px">'+(c.ports || c.status)+'</div>'+
         '</div>'+
-        '<button class="del-btn" style="padding:4px 8px;font-size:11px" onclick="stopContainer(\''+c.id+'\')">'+t('stopBtn')+'</button>'+
+        '<button class="del-btn" style="padding:4px 8px;font-size:11px" data-act="stopContainer" data-arg="' + c.id + '">'+t('stopBtn')+'</button>'+
       '</div>';
     });
   }
@@ -2168,7 +1539,7 @@ function rAi(){
   h += '</div>';
 
   h += '<div style="display:flex;gap:8px">';
-  h += '<button class="bp" style="flex:1" onclick="openCurrentAiChat()">' + svgChat + ' ' + t('aiOpenBtn', { name: activeAi }) + '</button>';
+  h += '<button class="bp" style="flex:1" data-act="openCurrentAiChat">' + svgChat + ' ' + t('aiOpenBtn', { name: activeAi }) + '</button>';
   h += '</div>';
   h += '</div>';
 
@@ -2202,14 +1573,14 @@ function rAi(){
 
     h += '<div style="display:flex;align-items:center;gap:6px;margin-left:10px">';
     if (isAct) {
-      h += '<button class="bs" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:4px 8px;font-size:11px" onclick="openCurrentAiChat()">' + svgChat + ' ' + (L === 'es' ? 'Abrir' : 'Open') + '</button>';
+      h += '<button class="bs" style="background:var(--vscode-button-background);color:var(--vscode-button-foreground);border:none;padding:4px 8px;font-size:11px" data-act="openCurrentAiChat">' + svgChat + ' ' + (L === 'es' ? 'Abrir' : 'Open') + '</button>';
     } else {
-      h += '<button class="bs" style="padding:4px 8px;font-size:11px" onclick="setAiProvider(\'' + item.n + '\')">' + t('aiUseBtn') + '</button>';
+      h += '<button class="bs" style="padding:4px 8px;font-size:11px" data-act="setAiProvider" data-arg="' + item.n + '">' + t('aiUseBtn') + '</button>';
     }
     h += '</div></div>';
   });
 
-  h += '<div style="margin-top:14px"><button class="bs" onclick="showScr(\'home\')">' + (L === 'es' ? 'Volver a tareas' : 'Back to tasks') + '</button></div>';
+  h += '<div style="margin-top:14px"><button class="bs" data-act="showScr" data-arg="home">' + (L === 'es' ? 'Volver a tareas' : 'Back to tasks') + '</button></div>';
   h += '</div>';
 
   el.innerHTML = h;
@@ -2407,7 +1778,7 @@ function rSet(){
     }
     h+='<div class="card card-bg" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div style="display:flex;align-items:center;gap:8px">'+(lg[n]||'')+'<div><div style="font-size:13px;font-weight:600;display:flex;align-items:center">'+n+detectedTag+'</div><div style="font-size:11px;color:var(--vscode-descriptionForeground)">'+(tDet[n]||'')+'</div></div></div><span style="font-size:12px;color:#10b981;font-weight:600;display:flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:#10b981;display:inline-block"></span>'+t('conn')+'</span></div>';
   });
-  h+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--vscode-panel-border)"><button class="bs" style="border-style:dashed" onclick="startOb()">'+svgPlus+' '+t('nPS')+'</button></div></div>';
+  h+='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--vscode-panel-border)"><button class="bs" style="border-style:dashed" data-act="startOb">'+svgPlus+' '+t('nPS')+'</button></div></div>';
   document.getElementById('sSet').innerHTML=h;
 }
 
@@ -2495,18 +1866,90 @@ window.addEventListener('message',e=>{
   }
 });
 
+
+function bindUiActions() {
+  document.addEventListener('click', (event) => {
+    const el = event.target.closest('[data-act]');
+    if (!el) return;
+    if (el.hasAttribute('data-stop')) event.stopPropagation();
+    dispatchAct(el.getAttribute('data-act'), el, el.getAttribute('data-arg'), el.getAttribute('data-arg2'));
+  });
+  document.addEventListener('input', (event) => {
+    const el = event.target.closest('[data-input]');
+    if (!el) return;
+    const kind = el.getAttribute('data-input');
+    if (kind === 'fC') fC(el.value);
+    else if (kind === 'setCrit') newCriteria[Number(el.getAttribute('data-idx'))] = el.value;
+  });
+}
+
+function dispatchAct(name, el, arg, arg2) {
+  switch (name) {
+    case 'cLang': return cLang(arg);
+    case 'startOb': return startOb();
+    case 'showScr': return showScr(arg);
+    case 'selectStarterStack': return selectStarterStack();
+    case 'obN': return obN(Number(arg));
+    case 'startLocally': return startLocally();
+    case 'toggleToolTips': return toggleToolTips();
+    case 'setCatFilter': return setCatFilter(arg, el);
+    case 'tC': return tC(el);
+    case 'connectJira': return connectJira();
+    case 'connectRepo': return connectRepo();
+    case 'finOb': return finOb();
+    case 'openTk': return openTk(arg);
+    case 'toggleTaskComplete': return toggleTaskComplete(arg);
+    case 'delTk': return delTk(arg);
+    case 'openCreateEpic': return openCreateEpic();
+    case 'openEpic': return openEpic(arg);
+    case 'editEpic': return editEpic(arg);
+    case 'deleteEpic': return deleteEpic(arg);
+    case 'closeEpic': return closeEpic();
+    case 'createTaskInEpic': return createTaskInEpic(arg);
+    case 'saveEpicForm': return saveEpicForm();
+    case 'addCrit': return addCrit();
+    case 'saveNewTask': return saveNewTask();
+    case 'rmCrit': return rmCrit(Number(arg));
+    case 'startAiWithTicket': return startAiWithTicket();
+    case 'reopenChat': return reopenChat();
+    case 'cpFullPrompt': return cpFullPrompt();
+    case 'cpP': return cpP(el, arg);
+    case 'goS': return goS(Number(arg));
+    case 'toast': return toast(arg);
+    case 'toggleJiraPreview': return toggleJiraPreview(arg);
+    case 'insertMd': return insertMd(arg, arg2);
+    case 'resetJiraComment': return resetJiraComment(arg);
+    case 'runTermTests': return runTermTests();
+    case 'rerunTestsVisual': return rerunTestsVisual();
+    case 'generateMoreTests': return generateMoreTests();
+    case 'generateMoreScreenshots': return generateMoreScreenshots();
+    case 'removeScreenshot': return removeScreenshot(Number(arg));
+    case 'addSS': return addSS();
+    case 'initGitInWorkspace': return initGitInWorkspace();
+    case 'doLocalCommit': return doLocalCommit();
+    case 'doMR': return doMR();
+    case 'startDockerApp': return startDockerApp();
+    case 'installDockerBrew': return installDockerBrew();
+    case 'openDockerDownload': return openDockerDownload();
+    case 'launchService': return launchService(arg);
+    case 'stopContainer': return stopContainer(arg);
+    case 'refreshDocker': return refreshDocker();
+    case 'openCurrentAiChat': return openCurrentAiChat();
+    case 'setAiProvider': return setAiProvider(arg);
+    default: return undefined;
+  }
+}
+
+bindUiActions();
+
 // Init
 updTop();
 vsc.postMessage({ type: 'checkDocker' });
 if(onb){
   document.getElementById('topAct').style.display='flex';
   document.getElementById('topLbl').innerText='· PROJ / checkout';
-  ${initialTicket ? "openTk('" + initialTicket + "');" : "showScr('home');"}
+  if (bootstrap.initialTicket) { openTk(bootstrap.initialTicket); } else { showScr('home'); }
 }else{
   rOb();
 }
-</script></body></html>`;
-}
-
-function deactivate() { }
-module.exports = { activate, deactivate };
+vsc.postMessage({ type: 'uiReady' });

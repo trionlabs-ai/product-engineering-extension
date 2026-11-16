@@ -5,10 +5,7 @@
       "name": "Run Product Studio Extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}",
-        "${workspaceFolder}/.."
-      ]
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}", "${workspaceFolder}/.."]
     }
   ]
 }

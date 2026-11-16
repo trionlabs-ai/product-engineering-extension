@@ -6,7 +6,7 @@ Product Studio turns VS Code into an accessible development studio: pick a Jira 
 
 ![Product Studio Flow (English)](https://raw.githubusercontent.com/fersiguenza/product-engineering-extension/main/media/demo.gif)
 
-*Available in English and Spanish: [Ver demostración en español](https://raw.githubusercontent.com/fersiguenza/product-engineering-extension/main/media/demo-es.gif)*
+_Available in English and Spanish: [Ver demostración en español](https://raw.githubusercontent.com/fersiguenza/product-engineering-extension/main/media/demo-es.gif)_
 
 ## Features
 
@@ -42,19 +42,25 @@ code --install-extension product-studio-1.7.0.vsix --force
 
 ### From source (development)
 
+```bash
+npm install
+```
+
 Open this folder in VS Code, press **F5**, and choose **Run Product Studio Extension**.
+
+`npm run lint` checks ESLint and Prettier. `npm test` runs unit tests and a VS Code smoke test that activates the extension and opens the panel. On Linux the smoke test needs a display (`xvfb-run -a npm test`).
 
 ## Configuration
 
 Open VS Code Settings (`Cmd+,` / `Ctrl+,`) and search for `Product Studio`:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `productStudio.language` | `auto` | UI language: `auto`, `es`, or `en` |
-| `productStudio.ai.provider` | `Claude` | Default AI assistant (`Claude`, `GitHub Copilot`, `Antigravity`, `Continue`, `Ollama`, `ChatGPT`) |
-| `productStudio.jira.domain` | `""` | Jira Cloud domain (e.g. `your-company.atlassian.net`) |
-| `productStudio.git.provider` | `gitlab` | Git provider: `gitlab` or `github` |
-| `productStudio.git.repository` | `""` | Repository path (e.g. `org/checkout-service`) |
+| Setting                        | Default  | Description                                                                                       |
+| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `productStudio.language`       | `auto`   | UI language: `auto`, `es`, or `en`                                                                |
+| `productStudio.ai.provider`    | `Claude` | Default AI assistant (`Claude`, `GitHub Copilot`, `Antigravity`, `Continue`, `Ollama`, `ChatGPT`) |
+| `productStudio.jira.domain`    | `""`     | Jira Cloud domain (e.g. `your-company.atlassian.net`)                                             |
+| `productStudio.git.provider`   | `gitlab` | Git provider: `gitlab` or `github`                                                                |
+| `productStudio.git.repository` | `""`     | Repository path (e.g. `org/checkout-service`)                                                     |
 
 ## Quick Start Guide
 
@@ -71,7 +77,7 @@ Open VS Code Settings (`Cmd+,` / `Ctrl+,`) and search for `Product Studio`:
 ## Tech Stack
 
 - Native VS Code Extension API (Webviews, Commands, State Storage)
-- Pure Vanilla JavaScript & CSS with VS Code Design Tokens
+- Pure Vanilla JavaScript & CSS with VS Code Design Tokens (host modules under `src/`, webview files under `media/webview/`)
 - Scalable Vector Graphics (SVG) — zero external heavy dependencies, zero emojis
 - Integrated Docker CLI & Homebrew subprocess automation
 

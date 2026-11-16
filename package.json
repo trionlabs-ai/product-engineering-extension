@@ -34,14 +34,20 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "main": "./extension.js",
+  "main": "./src/extension.js",
   "scripts": {
-    "vscode:prepublish": "node -c extension.js",
-    "compile": "node -c extension.js",
+    "vscode:prepublish": "node scripts/syntax-check.js",
+    "compile": "node scripts/syntax-check.js",
+    "check": "node scripts/syntax-check.js",
+    "lint": "eslint . && npm run format:check",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test:unit": "node --test --test-reporter spec test/unit/*.test.js",
+    "test:smoke": "node test/run-vscode-test.js",
+    "test": "npm run test:unit && npm run test:smoke",
     "package": "vsce package --no-dependencies --allow-missing-repository",
     "publish:vscode": "vsce publish",
-    "publish:ovsx": "ovsx publish",
-    "test": "node -c extension.js"
+    "publish:ovsx": "ovsx publish"
   },
   "contributes": {
     "commands": [
@@ -103,5 +109,14 @@
         }
       }
     }
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.1.1",
+    "eslint": "^10.15.0",
+    "globals": "^17.14.0",
+    "jsdom": "^31.0.1",
+    "prettier": "^3.10.1"
   }
 }

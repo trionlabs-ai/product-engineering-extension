@@ -1,0 +1,11 @@
+node_modules
+.vscode-test
+package-lock.json
+*.gif
+*.png
+*.vsix
+media/webview/main.js
+media/webview/main.css
+media/webview/index.html
+media/webview/i18n
+CHANGELOG.md

@@ -7,7 +7,7 @@
 1. **Create a publisher account** at https://marketplace.visualstudio.com/manage
    - Sign in with a Microsoft account
    - Create a publisher (e.g., `product-engineering`)
-   
+
 2. **Create a Personal Access Token (PAT)** at https://dev.azure.com
    - Go to User Settings > Personal Access Tokens
    - Create a token with **Marketplace (Manage)** scope
@@ -44,6 +44,7 @@ vsce package
 This creates a `.vsix` file (e.g., `product-studio-1.3.0.vsix`).
 
 You can test it locally:
+
 ```bash
 code --install-extension product-studio-1.3.0.vsix
 ```
@@ -58,6 +59,7 @@ vsce publish
 ```
 
 Or publish a specific version:
+
 ```bash
 vsce publish 1.3.0
 ```
@@ -65,6 +67,7 @@ vsce publish 1.3.0
 ### Update
 
 To push a new version:
+
 1. Update `version` in `package.json`
 2. Update `CHANGELOG.md`
 3. Run `vsce publish`
@@ -74,6 +77,7 @@ To push a new version:
 To publish as an Antigravity plugin, create a plugin manifest following the Antigravity plugin system:
 
 1. Create a `plugin.json`:
+
    ```json
    {
      "name": "product-studio",
@@ -93,6 +97,7 @@ To publish as an Antigravity plugin, create a plugin manifest following the Anti
 ## GitHub Releases
 
 For each version:
+
 1. Tag the release: `git tag v1.3.0`
 2. Push the tag: `git push origin v1.3.0`
 3. Create a GitHub Release with the `.vsix` file attached

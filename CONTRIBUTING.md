@@ -5,33 +5,40 @@ Thank you for your interest in contributing! Product Studio aims to make softwar
 ## Getting Started
 
 1. Fork and clone the repository
-2. Open the extension in VS Code:
+2. Install dev dependencies and open the extension in VS Code:
    ```bash
+   npm install
    code --extensionDevelopmentPath="$(pwd)"
    ```
-3. Make your changes to `extension.js`
+3. Extension host code lives under `src/`. The webview UI lives under `media/webview/` (`index.html`, `main.css`, `main.js`, and `i18n/es.json` / `i18n/en.json`).
 4. Press `Cmd+R` (or `Ctrl+R`) in the Extension Development Host window to reload
+5. Before sending a change, run `npm run lint` and `npm test`
 
 ## Development Guidelines
 
 ### Code Style
-- Vanilla JavaScript, no build step, no external dependencies
-- All UI HTML is embedded in `extension.js` as template literals
+
+- Vanilla JavaScript. Runtime code has no npm dependencies; ESLint, Prettier, and the test runner are dev-only
+- Webview HTML, CSS, and JS are separate files loaded with `webview.asWebviewUri` under a nonce Content Security Policy
 - Use VS Code theme CSS variables (`var(--vscode-*)`) for colors so the extension looks native in any theme
 - SVG icons only — no emoji, no external icon libraries
+- Git shell commands are built in `src/host/gitService.js`. Docker commands are built in `src/host/dockerService.js`
 
 ### i18n
-- All user-facing strings must be in the `i18n` object with both `es` and `en` keys
+
+- Shared UI strings live in `media/webview/i18n/es.json` and `media/webview/i18n/en.json`
 - Use the `t('key', {vars})` function to render translated text
-- When adding a new language, add a new key to every entry in the `i18n` object
+- When adding a new language, add a new dictionary and a key for every existing entry
 
 ### Adding a New Connector
+
 1. Add the connector to the `connectors` array with `name`, `cat` (category), `detail`, and `logo`
 2. Add an SVG logo to the `logos` object
 3. Add a detail URL to `toolDetail`
-4. If the connector has an API integration, add message handlers in `extension.js` `activate()`
+4. If the connector has an API integration, add a message handler in `src/host/messageRouter.js`
 
 ### Adding a New Ticket Type
+
 1. Add the type to the `typeLabels` and ticket data structures
 2. Define the step flow in `getSteps()` and `renderStepContent()`
 3. Update translations

@@ -4,5 +4,11 @@
 node_modules/
 docs/
 CONTRIBUTING.md
+test/**
+scripts/**
+eslint.config.js
+.prettierrc.json
+.prettierignore
 *.vsix
 .DS_Store
+.github/**
