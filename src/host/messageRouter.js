@@ -2,6 +2,15 @@ const git = require('./gitService');
 const gitWorkflow = require('./gitWorkflow');
 const docker = require('./dockerService');
 const { text } = require('./text');
+const {
+  readContextFile,
+  proposeWorkspacePlan,
+  acceptWorkspacePlan,
+  syncPlanStatuses,
+  markPlanTask,
+  manualPlan,
+  currentCounters,
+} = require('./planWorkflow');
 const { AI_TOOL_NAMES } = require('./language');
 
 const TERMINAL_TEST_COMMAND = 'npm test || echo "Running tests..."';
@@ -40,11 +49,12 @@ async function routeMessage(msg, ctx) {
       break;
     }
     case 'prepareTicketBranch': {
-      await gitWorkflow.prepareTicketBranch(ctx, {
+      const prepared = await gitWorkflow.prepareTicketBranch(ctx, {
         ticketId: msg.ticketId,
         title: msg.title,
         lang,
       });
+      if (prepared && prepared.ok) await markPlanTask(ctx, msg.ticketId, 'in_progress');
       break;
     }
     case 'initLocalGit': {
@@ -52,11 +62,12 @@ async function routeMessage(msg, ctx) {
       break;
     }
     case 'commitLocal': {
-      await gitWorkflow.commitTicket(ctx, {
+      const committed = await gitWorkflow.commitTicket(ctx, {
         ticketId: msg.ticketId,
         title: msg.title,
         lang,
       });
+      if (committed && committed.ok) await markPlanTask(ctx, msg.ticketId, 'done');
       break;
     }
     case 'setActiveAi': {
@@ -69,6 +80,49 @@ async function routeMessage(msg, ctx) {
     }
     case 'saveTasks': {
       ctx.state.set('tasks', msg.tasks);
+      await syncPlanStatuses(ctx, msg.tasks);
+      break;
+    }
+    case 'pickPlanContext': {
+      const root = ctx.getWorkspaceRoot();
+      if (!root) {
+        ctx.showWarningMessage(text(lang, 'noWorkspacePlan'));
+        break;
+      }
+      const picked = await ctx.showOpenDialog({
+        canSelectMany: false,
+        openLabel: text(lang, 'planFile'),
+        filters: {
+          [lang === 'es' ? 'Texto' : 'Text']: ['md', 'markdown', 'txt'],
+        },
+      });
+      if (!picked || !picked.length) break;
+      const read = await readContextFile(root, picked[0].fsPath);
+      if (!read.ok) {
+        ctx.showErrorMessage(
+          text(lang, read.reason === 'outside' ? 'planOutside' : 'planFileType')
+        );
+        break;
+      }
+      ctx.setPlanContext({ name: read.name, text: read.text });
+      ctx.postMessage({ type: 'planContext', name: read.name });
+      break;
+    }
+    case 'clearPlanContext': {
+      ctx.setPlanContext(null);
+      break;
+    }
+    case 'proposePlan': {
+      await proposeWorkspacePlan(ctx, { idea: msg.idea, lang });
+      break;
+    }
+    case 'manualPlan': {
+      const plan = manualPlan(await currentCounters(ctx.getWorkspaceRoot()));
+      ctx.postMessage({ type: 'planProposal', plan, source: 'manual' });
+      break;
+    }
+    case 'acceptPlan': {
+      await acceptWorkspacePlan(ctx, msg.plan, lang);
       break;
     }
     case 'saveEpics': {

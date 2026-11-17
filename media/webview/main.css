@@ -92,3 +92,7 @@ select.inp{cursor:pointer}
 .ss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:8px 0}
 .ss-card{border:1px solid var(--vscode-panel-border);border-radius:6px;overflow:hidden;background:var(--vscode-sideBar-background);font-size:11px}
 .ss-card:hover{border-color:var(--vscode-focusBorder)}
+.plan-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.plan-actions .bp,.plan-actions .bs{width:auto;padding:6px 12px;font-size:12px}
+.plan-note{font-size:12px;color:var(--vscode-descriptionForeground);margin:0 0 12px;line-height:1.45}
+.plan-error{border-color:#f59e0b;background:rgba(245,158,11,.08)}
