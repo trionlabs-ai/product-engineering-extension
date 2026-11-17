@@ -55,13 +55,15 @@ Open this folder in VS Code, press **F5**, and choose **Run Product Studio Exten
 
 Open VS Code Settings (`Cmd+,` / `Ctrl+,`) and search for `Product Studio`:
 
-| Setting                        | Default  | Description                                                                                       |
-| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
-| `productStudio.language`       | `auto`   | UI language: `auto`, `es`, or `en`                                                                |
-| `productStudio.ai.provider`    | `Claude` | Default AI assistant (`Claude`, `GitHub Copilot`, `Antigravity`, `Continue`, `Ollama`, `ChatGPT`) |
-| `productStudio.jira.domain`    | `""`     | Jira Cloud domain (e.g. `your-company.atlassian.net`)                                             |
-| `productStudio.git.provider`   | `gitlab` | Git provider: `gitlab` or `github`                                                                |
-| `productStudio.git.repository` | `""`     | Repository path (e.g. `org/checkout-service`)                                                     |
+| Setting                         | Default             | Description                                                                                       |
+| ------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------- |
+| `productStudio.language`        | `auto`              | UI language: `auto`, `es`, or `en`                                                                |
+| `productStudio.claudePath`      | `""`                | Optional full path to the Claude Code `claude` command                                            |
+| `productStudio.anthropic.model` | `claude-sonnet-4-5` | Model used when a saved Anthropic API key plans the project                                       |
+| `productStudio.ai.provider`     | `Claude`            | Default AI assistant (`Claude`, `GitHub Copilot`, `Antigravity`, `Continue`, `Ollama`, `ChatGPT`) |
+| `productStudio.jira.domain`     | `""`                | Jira Cloud domain (e.g. `your-company.atlassian.net`)                                             |
+| `productStudio.git.provider`    | `gitlab`            | Git provider: `gitlab` or `github`                                                                |
+| `productStudio.git.repository`  | `""`                | Repository path (e.g. `org/checkout-service`)                                                     |
 
 ## Quick Start Guide
 

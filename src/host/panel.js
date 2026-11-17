@@ -11,6 +11,7 @@ function createPanelController({ vscode, context, state, getLang }) {
   let uiReady = false;
   let planContext = null;
   let planWarning = '';
+  let planAbort = null;
 
   function detected() {
     return getDetectedExts((id) => vscode.extensions.getExtension(id));
@@ -100,6 +101,22 @@ function createPanelController({ vscode, context, state, getLang }) {
       },
       setPlanContext(value) {
         planContext = value;
+      },
+      secrets: context.secrets,
+      getProductConfig() {
+        return vscode.workspace.getConfiguration('productStudio');
+      },
+      isPlanRunning() {
+        return !!planAbort;
+      },
+      beginPlanRequest(controller) {
+        planAbort = controller;
+      },
+      endPlanRequest() {
+        planAbort = null;
+      },
+      cancelPlanRequest() {
+        if (planAbort) planAbort.abort();
       },
       markUiReady() {
         uiReady = true;

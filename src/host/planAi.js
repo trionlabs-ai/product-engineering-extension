@@ -51,6 +51,26 @@ async function proposePlan({ idea, contextText, model, counters }) {
   return { ok: true, plan: checked.plan, source: model.id || 'model' };
 }
 
+function extractPlanObject(stdout) {
+  const direct = extractJson(stdout);
+  if (!direct || typeof direct !== 'object') return null;
+  if (Array.isArray(direct.epics)) return direct;
+  if (typeof direct.result === 'string') return extractJson(direct.result);
+  if (direct.result && typeof direct.result === 'object' && Array.isArray(direct.result.epics)) {
+    return direct.result;
+  }
+  return null;
+}
+
+function interpretPlanModelText(stdout, counters) {
+  const parsed = extractPlanObject(stdout);
+  if (!parsed) return { ok: false, reason: 'unparseable' };
+  const plan = assignIds(parsed, counters || { nextTaskNumber: 1, nextEpicNumber: 1 });
+  const checked = validatePlan(plan);
+  if (!checked.ok) return { ok: false, reason: 'invalid', errors: checked.errors };
+  return { ok: true, plan: checked.plan };
+}
+
 async function selectLanguageModel(vscode) {
   try {
     if (!vscode || !vscode.lm || typeof vscode.lm.selectChatModels !== 'function') return null;
@@ -77,4 +97,6 @@ module.exports = {
   extractJson,
   proposePlan,
   selectLanguageModel,
+  extractPlanObject,
+  interpretPlanModelText,
 };

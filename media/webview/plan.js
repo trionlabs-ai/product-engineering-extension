@@ -7,6 +7,7 @@ let planFileName = '';
 let planError = '';
 let planBusy = false;
 let planSource = '';
+let planProviderLabel = '';
 
 function planEscape(value) {
   return String(value == null ? '' : value)
@@ -14,6 +15,20 @@ function planEscape(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function planBusyBar() {
+  if (!planBusy) return '';
+  const label = planProviderLabel
+    ? t('planUsing', { provider: planProviderLabel })
+    : t('planWorking');
+  return (
+    '<div class="plan-actions" style="margin-bottom:10px"><span class="plan-note" style="margin:0">' +
+    planEscape(label) +
+    '</span><button class="bs" data-plan="cancel">' +
+    t('planCancel') +
+    '</button></div>'
+  );
 }
 
 function rPlan() {
@@ -37,6 +52,12 @@ function renderPlanIdea(el) {
     '<p class="plan-note">' +
     t('planIntro') +
     '</p>' +
+    planBusyBar() +
+    (planProviderLabel && !planBusy
+      ? '<p class="plan-note">' +
+        planEscape(t('planUsing', { provider: planProviderLabel })) +
+        '</p>'
+      : '') +
     (planError
       ? '<div class="card plan-error" style="margin-bottom:12px"><p class="plan-note" style="margin:0">' +
         planEscape(planError) +
@@ -70,6 +91,14 @@ function renderPlanIdea(el) {
     '<button class="bs" data-plan="manual">' +
     t('planManual') +
     '</button>' +
+    '</div>' +
+    '<div class="plan-actions" style="margin-top:14px">' +
+    '<button class="bs" data-plan="set-key">' +
+    t('planSetKey') +
+    '</button>' +
+    '<button class="bs" data-plan="clear-key">' +
+    t('planClearKey') +
+    '</button>' +
     '</div></div>';
 }
 
@@ -77,6 +106,12 @@ function renderPlanDraft(el) {
   const plan = planDraft;
   let body =
     '<div class="ctr fi" style="max-width:720px">' +
+    planBusyBar() +
+    (planProviderLabel && !planBusy
+      ? '<p class="plan-note">' +
+        planEscape(t('planUsing', { provider: planProviderLabel })) +
+        '</p>'
+      : '') +
     '<div class="plan-actions" style="margin-bottom:12px">' +
     '<button class="bs" data-plan="back-draft">' +
     svgBack +
@@ -292,6 +327,7 @@ function markPlanDirty() {
 function showPlanProposal(plan, source) {
   planDraft = plan;
   planSource = source || '';
+  if (source && source !== 'manual') planProviderLabel = source;
   planDirty = false;
   planConfirm = false;
   planError = '';
@@ -332,6 +368,19 @@ document.addEventListener('click', (event) => {
   const action = el.getAttribute('data-plan');
   const epicIndex = Number(el.getAttribute('data-epic'));
   const taskIndex = Number(el.getAttribute('data-task'));
+  if (action === 'cancel') {
+    vsc.postMessage({ type: 'cancelPlan' });
+    return;
+  }
+  if (planBusy) return;
+  if (action === 'set-key') {
+    vsc.postMessage({ type: 'setAnthropicKey' });
+    return;
+  }
+  if (action === 'clear-key') {
+    vsc.postMessage({ type: 'clearAnthropicKey' });
+    return;
+  }
   if (action === 'back') {
     showScr('home');
     return;
@@ -378,7 +427,7 @@ document.addEventListener('click', (event) => {
       return;
     }
     planBusy = true;
-    planDraft = null;
+    planError = '';
     rPlan();
     vsc.postMessage({ type: 'proposePlan', idea: planIdea });
     return;
@@ -391,8 +440,7 @@ document.addEventListener('click', (event) => {
   if (action === 'regen-yes') {
     planConfirm = false;
     planBusy = true;
-    planDraft = null;
-    planDirty = false;
+    planError = '';
     rPlan();
     vsc.postMessage({ type: 'proposePlan', idea: planIdea });
     return;
@@ -475,11 +523,22 @@ window.addEventListener('message', (event) => {
     planFileName = data.name || '';
     if (!planDraft) rPlan();
   }
+  if (data.type === 'planProvider') {
+    planProviderLabel = data.provider || '';
+    if (planDraft) readPlanDraft();
+    if (planBusy) rPlan();
+  }
   if (data.type === 'planProposal') showPlanProposal(data.plan, data.source);
-  if (data.type === 'planUnavailable') {
+  if (
+    data.type === 'planUnavailable' ||
+    data.type === 'planFailed' ||
+    data.type === 'planCancelled'
+  ) {
     planBusy = false;
-    planError = data.message || t('planNoModel');
-    if (!planDraft) rPlan();
+    planError =
+      data.message || (data.type === 'planCancelled' ? t('planCancelled') : t('planNoModel'));
+    if (planDraft) readPlanDraft();
+    rPlan();
   }
   if (data.type === 'planInvalid') {
     planError = data.message || t('planInvalid');

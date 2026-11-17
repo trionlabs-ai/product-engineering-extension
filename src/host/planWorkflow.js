@@ -10,7 +10,17 @@ const {
   workspaceStatusToPlan,
   blankPlan,
 } = require('./planSchema');
-const { proposePlan, selectLanguageModel } = require('./planAi');
+const {
+  detectPlanProvider,
+  proposeWithProvider,
+  failureKey,
+  findWorkspaceClaude,
+  selectLanguageModel,
+  readAnthropicApiKey,
+  readAnthropicModel,
+  promptAndStoreAnthropicKey,
+  clearStoredAnthropicKey,
+} = require('./planProviders');
 const { listPlanSyncTargets } = require('./planSync');
 
 const CONTEXT_EXT = new Set(['.md', '.txt', '.markdown']);
@@ -56,27 +66,47 @@ async function currentCounters(root) {
 }
 
 async function proposeWorkspacePlan(ctx, { idea, lang }) {
-  const context = ctx.getPlanContext ? ctx.getPlanContext() : null;
-  const model = await selectLanguageModel(ctx.vscode);
-  const result = await proposePlan({
-    idea,
-    contextText: context && context.text,
-    model,
-    counters: await currentCounters(ctx.getWorkspaceRoot()),
-  });
-  if (!result.ok && result.reason === 'no-model') {
-    ctx.postMessage({ type: 'planUnavailable', message: text(lang, 'planNoModel') });
-    return result;
+  if (!idea || !String(idea).trim()) {
+    ctx.postMessage({ type: 'planFailed', message: text(lang, 'planNeedIdea') });
+    return { ok: false, reason: 'empty-idea' };
   }
-  if (!result.ok) {
-    ctx.postMessage({
-      type: 'planUnavailable',
-      message: text(lang, 'planModelError'),
+  if (ctx.isPlanRunning && ctx.isPlanRunning()) return { ok: false, reason: 'busy' };
+  const controller = new AbortController();
+  if (ctx.beginPlanRequest) ctx.beginPlanRequest(controller);
+  try {
+    const context = ctx.getPlanContext ? ctx.getPlanContext() : null;
+    const config = ctx.getProductConfig ? ctx.getProductConfig() : null;
+    const provider = await detectPlanProvider({
+      loadLanguageModel: () => selectLanguageModel(ctx.vscode),
+      findClaude: () => findWorkspaceClaude(config && config.get ? config.get('claudePath') : ''),
+      readApiKey: () => readAnthropicApiKey(ctx.secrets),
     });
+    if (!provider) {
+      ctx.postMessage({ type: 'planUnavailable', message: text(lang, 'planNoModel') });
+      return { ok: false, reason: 'no-model' };
+    }
+    ctx.postMessage({ type: 'planProvider', provider: provider.label });
+    const result = await proposeWithProvider(provider, {
+      idea,
+      contextText: context && context.text,
+      counters: await currentCounters(ctx.getWorkspaceRoot()),
+      cwd: ctx.getWorkspaceRoot(),
+      signal: controller.signal,
+      modelName: readAnthropicModel(config),
+    });
+    if (controller.signal.aborted || result.reason === 'cancelled') {
+      ctx.postMessage({ type: 'planCancelled', message: text(lang, 'planCancelled') });
+      return { ok: false, reason: 'cancelled' };
+    }
+    if (!result.ok) {
+      ctx.postMessage({ type: 'planFailed', message: text(lang, failureKey(result.reason)) });
+      return result;
+    }
+    ctx.postMessage({ type: 'planProposal', plan: result.plan, source: provider.label });
     return result;
+  } finally {
+    if (ctx.endPlanRequest) ctx.endPlanRequest();
   }
-  ctx.postMessage({ type: 'planProposal', plan: result.plan, source: result.source });
-  return result;
 }
 
 async function acceptWorkspacePlan(ctx, plan, lang) {
@@ -153,6 +183,23 @@ function manualPlan(counters) {
   return blankPlan(counters || { nextTaskNumber: 1, nextEpicNumber: 1 });
 }
 
+function setAnthropicKey(ctx, lang) {
+  return promptAndStoreAnthropicKey({
+    lang,
+    secrets: ctx.secrets,
+    showInputBox: (options) => ctx.showInputBox(options),
+    notify: (message) => ctx.showInformationMessage(message),
+  });
+}
+
+function clearAnthropicKey(ctx, lang) {
+  return clearStoredAnthropicKey({
+    lang,
+    secrets: ctx.secrets,
+    notify: (message) => ctx.showInformationMessage(message),
+  });
+}
+
 module.exports = {
   readContextFile,
   hydratePlanIntoState,
@@ -162,4 +209,6 @@ module.exports = {
   markPlanTask,
   manualPlan,
   currentCounters,
+  setAnthropicKey,
+  clearAnthropicKey,
 };

@@ -10,6 +10,8 @@ const {
   markPlanTask,
   manualPlan,
   currentCounters,
+  setAnthropicKey,
+  clearAnthropicKey,
 } = require('./planWorkflow');
 const { AI_TOOL_NAMES } = require('./language');
 
@@ -114,6 +116,18 @@ async function routeMessage(msg, ctx) {
     }
     case 'proposePlan': {
       await proposeWorkspacePlan(ctx, { idea: msg.idea, lang });
+      break;
+    }
+    case 'cancelPlan': {
+      if (ctx.cancelPlanRequest) ctx.cancelPlanRequest();
+      break;
+    }
+    case 'setAnthropicKey': {
+      await setAnthropicKey(ctx, lang);
+      break;
+    }
+    case 'clearAnthropicKey': {
+      await clearAnthropicKey(ctx, lang);
       break;
     }
     case 'manualPlan': {
