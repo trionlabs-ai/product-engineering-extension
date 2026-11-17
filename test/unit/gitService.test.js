@@ -2,32 +2,52 @@ const assert = require('assert');
 const test = require('node:test');
 const git = require('../../src/host/gitService');
 
-test('formatCommitMessage builds feat(ticket): title and defaults the title', () => {
+const hostile = 'say "hello" $(whoami) `id` ; rm -rf / && echo\nnext';
+
+test('formatCommitMessage keeps the title literal, including shell metacharacters', () => {
   assert.strictEqual(
     git.formatCommitMessage('PROJ-12', 'Add pay button'),
     'feat(PROJ-12): Add pay button'
   );
-  assert.strictEqual(git.formatCommitMessage('LOCAL-3', ''), 'feat(LOCAL-3): complete task');
-  assert.strictEqual(git.formatCommitMessage('LOCAL-3'), 'feat(LOCAL-3): complete task');
+  assert.strictEqual(git.formatCommitMessage('T-9', hostile), `feat(T-9): ${hostile}`);
 });
 
-test('init command still overwrites the repository git identity', () => {
-  const command = git.buildInitRepositoryCommand();
-  assert.match(command, /^git init && /);
-  assert.match(command, /git config user\.name "Product Engineer"/);
-  assert.match(command, /git config user\.email "engineer@local"/);
-  assert.match(command, /git commit -m "chore: initial commit"$/);
+test('commit, add, and push argv never build a shell string', () => {
+  const message = git.formatCommitMessage('T-9', hostile);
+  assert.deepStrictEqual(git.commitArgs(message), ['commit', '-m', message]);
+  assert.deepStrictEqual(git.addAllArgs(), ['add', '-A']);
+  assert.deepStrictEqual(git.pushArgs('origin', 'feat/T-9-task'), [
+    'push',
+    '--set-upstream',
+    'origin',
+    'feat/T-9-task',
+  ]);
+  assert.ok(!git.pushArgs('origin', 'feat/T-9-task').includes('--force'));
+  assert.ok(!git.pushArgs('origin', 'feat/T-9-task').includes('-f'));
 });
 
-test('local commit command still interpolates the message without escaping quotes', () => {
-  const message = git.formatCommitMessage('T-9', 'say "hello" && touch /tmp/pwned');
-  const command = git.buildLocalCommitCommand(message);
-  assert.match(command, /git config user\.name "Product Engineer"/);
-  assert.match(command, /git config user\.email "engineer@local"/);
-  assert.ok(
-    command.endsWith('git commit -m "feat(T-9): say "hello" && touch /tmp/pwned"'),
-    command
+test('ticket ids are validated and branch names drop shell characters from the title', () => {
+  assert.strictEqual(git.isTicketId('LOCAL-4'), true);
+  assert.strictEqual(git.isTicketId('PAY-101'), true);
+  assert.strictEqual(git.isTicketId('T-1;touch'), false);
+  assert.strictEqual(git.isTicketId('$(whoami)'), false);
+  assert.strictEqual(git.isTicketId('T-1 && rm'), false);
+  assert.strictEqual(git.isCommitTitle(hostile), true);
+  assert.strictEqual(git.isCommitTitle(''), false);
+  assert.strictEqual(git.isCommitTitle('ok\0'), false);
+  assert.strictEqual(
+    git.ticketBranchName('T-9', hostile),
+    'feat/T-9-say-hello-whoami-id-rm-rf-echo-next'
   );
+});
+
+test('identity values cannot smuggle flags or newlines', () => {
+  assert.strictEqual(git.isIdentityValue('Ada Lovelace'), true);
+  assert.strictEqual(git.isIdentityValue('--global'), false);
+  assert.strictEqual(git.isIdentityValue('Ada\nLovelace'), false);
+  assert.strictEqual(git.isEmail('ada@example.com'), true);
+  assert.strictEqual(git.isEmail('ada@example.com\n'), false);
+  assert.strictEqual(git.isEmail('--global'), false);
 });
 
 test('interpretGitProbe matches the previous status rules', () => {
@@ -51,46 +71,31 @@ test('interpretGitProbe matches the previous status rules', () => {
     }),
     { hasGit: true, branch: 'develop', hasChanges: true, commits: 4, rootPath: '/work' }
   );
-  assert.strictEqual(
-    git.interpretGitProbe('/work', {
-      inside: true,
-      branchErr: new Error('no'),
-      branchStdout: '',
-      statusErr: null,
-      statusStdout: '   \n',
-      countErr: new Error('no head'),
-      countStdout: '',
-    }).branch,
-    'main'
-  );
 });
 
-test('getLocalGitStatus runs the isolated git commands', async () => {
+test('getLocalGitStatus calls git with argument arrays', async () => {
   const calls = [];
-  const exec = (cmd, options, cb) => {
-    calls.push(cmd);
-    if (cmd === git.commands.isInsideWorkTree) cb(null, 'true\n');
-    else if (cmd === git.commands.currentBranch) cb(null, 'main\n');
-    else if (cmd === git.commands.statusPorcelain) cb(null, '');
-    else if (cmd === git.commands.revListCountHead) cb(null, '2\n');
-    else cb(new Error('unexpected ' + cmd));
+  const runFile = (file, args, options) => {
+    calls.push({ file, args });
     assert.strictEqual(options.cwd, '/work');
+    if (args[0] === 'rev-parse') return Promise.resolve({ ok: true, stdout: 'true\n', stderr: '' });
+    if (args[0] === 'branch') return Promise.resolve({ ok: true, stdout: 'main\n', stderr: '' });
+    if (args[0] === 'status') return Promise.resolve({ ok: true, stdout: '', stderr: '' });
+    if (args[0] === 'rev-list') return Promise.resolve({ ok: true, stdout: '2\n', stderr: '' });
+    return Promise.resolve({ ok: false, stdout: '', stderr: 'unexpected' });
   };
-  const status = await git.getLocalGitStatus(exec, '/work');
-  assert.deepStrictEqual(calls, [
-    git.commands.isInsideWorkTree,
-    git.commands.currentBranch,
-    git.commands.statusPorcelain,
-    git.commands.revListCountHead,
-  ]);
-  assert.deepStrictEqual(status, {
-    hasGit: true,
-    branch: 'main',
-    hasChanges: false,
-    commits: 2,
-    rootPath: '/work',
-  });
-  const missing = await git.getLocalGitStatus(exec, null);
-  assert.strictEqual(missing.hasGit, false);
+  const status = await git.getLocalGitStatus(runFile, '/work');
+  assert.deepStrictEqual(
+    calls.map((call) => call.args),
+    [
+      ['rev-parse', '--is-inside-work-tree'],
+      ['branch', '--show-current'],
+      ['status', '--porcelain'],
+      ['rev-list', '--count', 'HEAD'],
+    ]
+  );
+  assert.strictEqual(status.hasGit, true);
+  assert.strictEqual(status.commits, 2);
+  const missing = await git.getLocalGitStatus(runFile, null);
   assert.strictEqual(missing.rootPath, null);
 });

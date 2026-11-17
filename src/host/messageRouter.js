@@ -1,5 +1,7 @@
 const git = require('./gitService');
+const gitWorkflow = require('./gitWorkflow');
 const docker = require('./dockerService');
+const { text } = require('./text');
 const { AI_TOOL_NAMES } = require('./language');
 
 const TERMINAL_TEST_COMMAND = 'npm test || echo "Running tests..."';
@@ -33,70 +35,27 @@ async function routeMessage(msg, ctx) {
       break;
     }
     case 'checkLocalGit': {
-      const gitStat = await git.getLocalGitStatus(ctx.exec, ctx.getWorkspaceRoot());
+      const gitStat = await git.getLocalGitStatus(ctx.runFile, ctx.getWorkspaceRoot());
       ctx.postMessage({ type: 'localGitInfo', ...gitStat });
       break;
     }
-    case 'initLocalGit': {
-      const rootInit = ctx.getWorkspaceRoot();
-      if (!rootInit) {
-        ctx.showWarningMessage(
-          lang === 'es'
-            ? 'Abre una carpeta de trabajo en VS Code primero.'
-            : 'Open a workspace folder in VS Code first.'
-        );
-        break;
-      }
-      ctx.exec(git.buildInitRepositoryCommand(), { cwd: rootInit }, async () => {
-        const upStat = await git.getLocalGitStatus(ctx.exec, rootInit);
-        ctx.postMessage({ type: 'localGitInfo', ...upStat });
-        ctx.showInformationMessage(
-          lang === 'es'
-            ? 'Repositorio Git local inicializado correctamente.'
-            : 'Local Git repository initialized successfully.'
-        );
+    case 'prepareTicketBranch': {
+      await gitWorkflow.prepareTicketBranch(ctx, {
+        ticketId: msg.ticketId,
+        title: msg.title,
+        lang,
       });
       break;
     }
+    case 'initLocalGit': {
+      await gitWorkflow.initRepository(ctx, lang);
+      break;
+    }
     case 'commitLocal': {
-      const rootCommit = ctx.getWorkspaceRoot();
-      const commitMsgText = git.formatCommitMessage(msg.ticketId, msg.title);
-      if (!rootCommit) {
-        const virtualHash = 'loc-' + Math.random().toString(36).substring(2, 8);
-        ctx.postMessage({
-          type: 'localCommitSuccess',
-          ticketId: msg.ticketId,
-          hash: virtualHash,
-          branch: 'local',
-        });
-        ctx.showInformationMessage(
-          lang === 'es'
-            ? `Commit local registrado para ${msg.ticketId}.`
-            : `Local commit recorded for ${msg.ticketId}.`
-        );
-        break;
-      }
-      ctx.exec(git.buildLocalCommitCommand(commitMsgText), { cwd: rootCommit }, () => {
-        ctx.exec(git.commands.shortHead, { cwd: rootCommit }, (hErr, hOut) => {
-          const commitHash =
-            hErr || !hOut.trim()
-              ? 'loc-' + Math.random().toString(36).substring(2, 8)
-              : hOut.trim();
-          ctx.exec(git.commands.currentBranch, { cwd: rootCommit }, (bErr, bOut) => {
-            const curBranch = bErr || !bOut.trim() ? 'main' : bOut.trim();
-            ctx.postMessage({
-              type: 'localCommitSuccess',
-              ticketId: msg.ticketId,
-              hash: commitHash,
-              branch: curBranch,
-            });
-            ctx.showInformationMessage(
-              lang === 'es'
-                ? `Commit local realizado (${commitHash}): ${commitMsgText}`
-                : `Local commit created (${commitHash}): ${commitMsgText}`
-            );
-          });
-        });
+      await gitWorkflow.commitTicket(ctx, {
+        ticketId: msg.ticketId,
+        title: msg.title,
+        lang,
       });
       break;
     }
@@ -215,8 +174,8 @@ async function routeMessage(msg, ctx) {
       break;
     }
     case 'checkDocker': {
-      const docStatus = await docker.getDockerStatus(ctx.exec);
-      const docContainers = await docker.getDockerContainers(ctx.exec);
+      const docStatus = await docker.getDockerStatus(ctx.runFile);
+      const docContainers = await docker.getDockerContainers(ctx.runFile);
       ctx.postMessage({
         type: 'dockerInfo',
         status: docStatus,
@@ -232,52 +191,66 @@ async function routeMessage(msg, ctx) {
     }
     case 'startDockerDaemon': {
       if (ctx.platform === 'darwin') {
-        ctx.exec(docker.OPEN_DOCKER_DESKTOP_COMMAND, (err) => {
-          if (err) {
-            ctx.showErrorMessage('Error al abrir Docker Desktop: ' + err.message);
-          } else {
-            ctx.showInformationMessage(
-              lang === 'es' ? 'Abriendo Docker Desktop...' : 'Opening Docker Desktop...'
-            );
-          }
-        });
+        const opened = await ctx.runFile('open', docker.OPEN_DOCKER_DESKTOP_ARGS);
+        if (!opened.ok) {
+          ctx.showErrorMessage(
+            'Error al abrir Docker Desktop: ' +
+              (opened.error ? opened.error.message : opened.stderr)
+          );
+        } else {
+          ctx.showInformationMessage(
+            lang === 'es' ? 'Abriendo Docker Desktop...' : 'Opening Docker Desktop...'
+          );
+        }
       }
       break;
     }
     case 'launchDockerService': {
-      const cmd = docker.buildLaunchCommand(msg.service);
-      if (cmd) {
-        ctx.exec(cmd, async (err) => {
-          if (err) {
-            ctx.showErrorMessage('Error al iniciar servicio: ' + err.message);
-          } else {
-            ctx.showInformationMessage(
-              lang === 'es' ? 'Servicio iniciado correctamente.' : 'Service started successfully.'
-            );
-          }
-          const updatedStatus = await docker.getDockerStatus(ctx.exec);
-          const updatedContainers = await docker.getDockerContainers(ctx.exec);
-          ctx.postMessage({
-            type: 'dockerInfo',
-            status: updatedStatus,
-            containers: updatedContainers,
-          });
+      const launched = await docker.launchService(ctx.runFile, msg.service);
+      if (launched) {
+        if (launched.ok) {
+          ctx.showInformationMessage(
+            lang === 'es' ? 'Servicio iniciado correctamente.' : 'Service started successfully.'
+          );
+        } else {
+          ctx.showErrorMessage(
+            'Error al iniciar servicio: ' +
+              (launched.stderr || (launched.error && launched.error.message) || '')
+          );
+        }
+        const updatedStatus = await docker.getDockerStatus(ctx.runFile);
+        const updatedContainers = await docker.getDockerContainers(ctx.runFile);
+        ctx.postMessage({
+          type: 'dockerInfo',
+          status: updatedStatus,
+          containers: updatedContainers,
         });
       }
       break;
     }
     case 'stopDockerContainer': {
-      if (msg.containerId) {
-        ctx.exec(docker.buildStopCommand(msg.containerId), async () => {
-          const updatedStatus = await docker.getDockerStatus(ctx.exec);
-          const updatedContainers = await docker.getDockerContainers(ctx.exec);
-          ctx.postMessage({
-            type: 'dockerInfo',
-            status: updatedStatus,
-            containers: updatedContainers,
-          });
-          ctx.showInformationMessage(lang === 'es' ? 'Contenedor detenido.' : 'Container stopped.');
-        });
+      if (!msg.containerId) break;
+      const stopped = await docker.stopContainer(ctx.runFile, msg.containerId);
+      if (stopped.reason === 'invalid') {
+        ctx.showErrorMessage(text(lang, 'invalidContainerId'));
+        break;
+      }
+      const updatedStatus = await docker.getDockerStatus(ctx.runFile);
+      const updatedContainers = await docker.getDockerContainers(ctx.runFile);
+      ctx.postMessage({
+        type: 'dockerInfo',
+        status: updatedStatus,
+        containers: updatedContainers,
+      });
+      if (stopped.ok) {
+        ctx.showInformationMessage(lang === 'es' ? 'Contenedor detenido.' : 'Container stopped.');
+      } else {
+        ctx.showErrorMessage(
+          (lang === 'es'
+            ? 'No se pudo detener el contenedor: '
+            : 'Could not stop the container: ') +
+            (stopped.stderr || (stopped.error && stopped.error.message) || '')
+        );
       }
       break;
     }

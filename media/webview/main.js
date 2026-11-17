@@ -938,7 +938,12 @@ function saveNewTask(){
 }
 
 // ---- TICKET WORKSPACE ----
-function openTk(id){aTk=id;cS=1;showScr('ticket');rTk()}
+function openTk(id){
+  aTk=id;cS=1;showScr('ticket');rTk();
+  const tk=tasks[id];
+  const title=tk?(tk.title[L]||tk.title.es||tk.title.en||(typeof tk.title==='string'?tk.title:'')):'';
+  vsc.postMessage({type:'prepareTicketBranch',ticketId:id,title:title});
+}
 function gSt(tk){return tk.type==='spike'?4:5}
 function rTk(){
   const tk=tasks[aTk];if(!tk)return;

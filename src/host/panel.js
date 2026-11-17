@@ -1,5 +1,5 @@
-const cp = require('child_process');
 const { routeMessage } = require('./messageRouter');
+const { runFile } = require('./process');
 const { renderWebviewHtml, createNonce } = require('../webview/html');
 const { getDetectedExts, pickDefaultAi } = require('./language');
 const { triggerAiChat } = require('./aiChat');
@@ -65,7 +65,10 @@ function createPanelController({ vscode, context, state, getLang }) {
         const folders = vscode.workspace.workspaceFolders;
         return folders && folders.length > 0 ? folders[0].uri.fsPath : null;
       },
-      exec: cp.exec,
+      runFile,
+      showInputBox(options) {
+        return vscode.window.showInputBox(options);
+      },
       triggerAiChat(prompt, lang, provider) {
         return triggerAiChat(vscode, prompt, lang, provider);
       },
