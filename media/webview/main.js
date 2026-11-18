@@ -16,6 +16,7 @@ function attrEncode(value) {
     .replace(/</g, '&lt;');
 }
 let localGitState = { hasGit: false, branch: 'main', hasChanges: false, commits: 0, rootPath: null };
+let workNotice = '';
 let selC=new Set(); // Start empty - let user pick their own stack!
 let aTk=null,cS=1,filterMode='all';
 
@@ -601,9 +602,9 @@ function renderTaskCard(id) {
       '</div>' +
     '</div>' +
     '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
-      '<span class="badge" style="background:var(--vscode-button-secondaryBackground, rgba(255,255,255,.06));color:var(--vscode-foreground);border:1px solid var(--vscode-panel-border);padding:3px 8px;font-size:11px;font-weight:500;display:flex;align-items:center;gap:4px">' +
-        (L === 'es' ? 'Trabajar' : 'Work') + ' ' + svgChev +
-      '</span>' +
+      '<button class="badge" data-act="workOnTask" data-arg="' + id + '" data-stop="1" style="background:var(--vscode-button-secondaryBackground, rgba(255,255,255,.06));color:var(--vscode-foreground);border:1px solid var(--vscode-panel-border);padding:3px 8px;font-size:11px;font-weight:500;display:flex;align-items:center;gap:4px;cursor:pointer">' +
+        t('work') + ' ' + svgChev +
+      '</button>' +
       '<button class="del-btn" data-act="delTk" data-arg="' + id + '" data-stop="1" title="' + t('delTask') + '">' + svgDel + '</button>' +
     '</div>' +
   '</div>';
@@ -945,11 +946,20 @@ function saveNewTask(){
 }
 
 // ---- TICKET WORKSPACE ----
-function openTk(id){
-  aTk=id;cS=1;showScr('ticket');rTk();
+function ticketTitle(id){
   const tk=tasks[id];
-  const title=tk?(tk.title[L]||tk.title.es||tk.title.en||(typeof tk.title==='string'?tk.title:'')):'';
-  vsc.postMessage({type:'prepareTicketBranch',ticketId:id,title:title});
+  return tk?(tk.title[L]||tk.title.es||tk.title.en||(typeof tk.title==='string'?tk.title:'')):'';
+}
+function showTicket(id){
+  aTk=id;cS=1;showScr('ticket');rTk();
+}
+function openTk(id){
+  showTicket(id);
+  vsc.postMessage({type:'prepareTicketBranch',ticketId:id,title:ticketTitle(id)});
+}
+function workOnTask(id){
+  showTicket(id);
+  vsc.postMessage({type:'workOnTask',ticketId:id,title:ticketTitle(id)});
 }
 function gSt(tk){return tk.type==='spike'?4:5}
 function rTk(){
@@ -970,13 +980,14 @@ function rSC(){
 
   if(cS===1){
     let fig='';if(tk.figma)fig='<div class="card card-bg" style="padding:0;overflow:hidden"><div style="padding:8px 12px;border-bottom:1px solid var(--vscode-panel-border);display:flex;align-items:center;gap:6px;font-size:12px">'+lg.Figma+'<strong>'+t('fig')+'</strong></div><div style="padding:12px;display:flex;justify-content:center;background:#1a1a20"><div style="width:100%;max-width:320px;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,.3)"><div style="background:#f1f5f9;padding:6px 8px;font-size:11px;color:#64748b;font-weight:700">Mockup</div><div style="padding:8px;display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;font-weight:700;color:#0f172a">'+(L==='es'?'Historial':'History')+'</span><div style="border:1px solid #93c5fd;border-radius:4px;padding:3px 6px;background:#eff6ff;font-size:10px;color:#2563eb;font-weight:600">'+(L==='es'?'7 dias':'7 days')+'</div></div></div></div></div>';
-    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 1</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+ti+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+(sp?(L==='es'?'Ticket de investigacion. Lee el objetivo.':'Investigation ticket. Read the objective.'):(L==='es'?'Lee los detalles y pedi a '+activeAi+' que empiece.':'Read the details and ask '+activeAi+' to start.'))+'</p><div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+t(sp?'spO':'wh')+'</div><p style="font-size:13px;line-height:1.5">'+de+'</p></div>'+fig+'<div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+t(sp?'spD':'crit')+'</div><div style="display:flex;flex-direction:column;gap:6px">'+cr.map(x=>'<div style="display:flex;align-items:center;gap:8px;font-size:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-descriptionForeground)" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'+x+'</div>').join('')+'</div></div><button class="bp" data-act="startAiWithTicket">'+svgChat+' '+(sp?(L==='es'?'Investigar con '+activeAi:'Investigate with '+activeAi):(L==='es'?'Pedile a '+activeAi+' que empiece':'Ask '+activeAi+' to start'))+'</button><p style="text-align:center;font-size:11px;color:var(--vscode-descriptionForeground);margin-top:6px">'+(L==='es'?'Se abre el chat de '+activeAi+' con el contexto cargado.':'Opens '+activeAi+' chat with context loaded.')+'</p>';
+    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 1</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+ti+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+(sp?(L==='es'?'Ticket de investigacion. Lee el objetivo.':'Investigation ticket. Read the objective.'):(L==='es'?'Lee los detalles y pedi a Claude Code que empiece.':'Read the details and ask Claude Code to start.'))+'</p><div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+t(sp?'spO':'wh')+'</div><p style="font-size:13px;line-height:1.5">'+de+'</p></div>'+fig+'<div class="card card-bg"><div class="lbl" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">'+t(sp?'spD':'crit')+'</div><div style="display:flex;flex-direction:column;gap:6px">'+cr.map(x=>'<div style="display:flex;align-items:center;gap:8px;font-size:13px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--vscode-descriptionForeground)" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>'+x+'</div>').join('')+'</div></div><button class="bp" data-act="workOnTask" data-arg="'+aTk+'">'+svgChat+' '+t('workInClaude')+'</button><p style="text-align:center;font-size:11px;color:var(--vscode-descriptionForeground);margin-top:6px">'+t('workHint')+'</p>';
   }
   else if(cS===2){
     const fullPrompt = buildTicketPrompt(tk, aTk);
     const pr=sp?(L==='es'?['Investiga opciones y compara alternativas','Arma una tabla comparativa con pros y contras','Cual es la recomendacion final para arquitectura?']:['Investigate options and compare alternatives','Create a comparison table with pros and cons','What is the final architectural recommendation?']):(L==='es'?['Genera los tests automaticos para estos criterios','Explicame los archivos que modificaste','Como pruebo este cambio en localhost?']:['Generate automated tests for these criteria','Explain the files you modified','How do I test this change on localhost?']);
 
-    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 2</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t(sp?'iAI':'wAI')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+(L==='es'?'El contexto fue copiado. Pegalo con Cmd+V o Ctrl+V en tu chat de '+activeAi+'.':'Context was copied. Paste with Cmd+V or Ctrl+V in your '+activeAi+' chat.')+'</p>'+
+    const workLine = workNotice || (L==='es'?'El contexto fue copiado. Pegalo con Cmd+V o Ctrl+V en tu chat de '+activeAi+'.':'Context was copied. Paste with Cmd+V or Ctrl+V in your '+activeAi+' chat.');
+    c.innerHTML='<div style="margin-bottom:4px"><span style="font-size:11px;color:var(--vscode-descriptionForeground);font-weight:600">'+t('stp')+' 2</span></div><h2 style="font-size:15px;font-weight:700;margin-bottom:4px">'+t(sp?'iAI':'wAI')+'</h2><p style="font-size:12px;color:var(--vscode-descriptionForeground);margin-bottom:14px">'+workLine+'</p>'+
     '<div class="card" style="border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05);margin-bottom:12px">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'+
         '<div style="display:flex;align-items:center;gap:6px;font-weight:600;color:#10b981;font-size:12px">'+svgCheck+'<span>'+(L==='es'?'Prompt copiado y listo para '+activeAi:'Prompt copied and ready for '+activeAi)+'</span></div>'+
@@ -1249,14 +1260,7 @@ function buildTicketPrompt(tk, id){
 }
 
 function startAiWithTicket(){
-  const tk = tasks[aTk];
-  const p = buildTicketPrompt(tk, aTk);
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(p).catch(() => {});
-  }
-  vsc.postMessage({ type: 'startAiChat', prompt: p, ticketId: aTk, provider: activeAi });
-  toast((L === 'es' ? 'Prompt copiado y chat de ' : 'Prompt copied & ') + activeAi + (L === 'es' ? ' iniciado' : ' chat started'));
-  goS(2);
+  workOnTask(aTk);
 }
 
 function reopenChat(){
@@ -1841,6 +1845,11 @@ window.addEventListener('message',e=>{
     };
     if (aTk && cS === 5) rSC();
   }
+  if(e.data.type==='workStarted'){
+    const target = e.data.target;
+    workNotice = target === 'claudePanel' ? t('workStepPanel') : target === 'claudeTerminal' ? t('workStepTerminal') : t('workStepClipboard');
+    if (aTk === e.data.ticketId) goS(2);
+  }
   if(e.data.type==='localCommitSuccess'){
     const successMsg = (L === 'es' ? 'Commit local ' : 'Local commit ') + (e.data.hash || '') + (L === 'es' ? ' realizado en rama ' : ' created on branch ') + (e.data.branch || 'main') + '.';
     sDone(successMsg);
@@ -1923,6 +1932,7 @@ function dispatchAct(name, el, arg, arg2) {
     case 'saveNewTask': return saveNewTask();
     case 'rmCrit': return rmCrit(Number(arg));
     case 'startAiWithTicket': return startAiWithTicket();
+    case 'workOnTask': return workOnTask(arg);
     case 'reopenChat': return reopenChat();
     case 'cpFullPrompt': return cpFullPrompt();
     case 'cpP': return cpP(el, arg);

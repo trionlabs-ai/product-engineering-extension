@@ -58,6 +58,7 @@ Open VS Code Settings (`Cmd+,` / `Ctrl+,`) and search for `Product Studio`:
 | Setting                         | Default             | Description                                                                                       |
 | ------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------- |
 | `productStudio.language`        | `auto`              | UI language: `auto`, `es`, or `en`                                                                |
+| `productStudio.workTarget`      | `auto`              | Where Work sends a task: `auto`, `claudePanel`, `claudeTerminal`, or `clipboard`                  |
 | `productStudio.claudePath`      | `""`                | Optional full path to the Claude Code `claude` command                                            |
 | `productStudio.anthropic.model` | `claude-sonnet-4-5` | Model used when a saved Anthropic API key plans the project                                       |
 | `productStudio.ai.provider`     | `Claude`            | Default AI assistant (`Claude`, `GitHub Copilot`, `Antigravity`, `Continue`, `Ollama`, `ChatGPT`) |

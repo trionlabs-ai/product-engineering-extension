@@ -228,5 +228,14 @@
   "planOutside": "Ese archivo esta fuera de la carpeta abierta.",
   "planFileType": "Elige un archivo markdown o de texto de esta carpeta.",
   "planSummary": "Resumen corto",
-  "planOpen": "Planificar con IA"
+  "planOpen": "Planificar con IA",
+  "work": "Trabajar",
+  "workInClaude": "Trabajar en Claude Code",
+  "workHint": "Abre Claude Code con esta tarea escrita. Presiona Enter para enviarla.",
+  "workPanelReady": "Claude Code esta abierto con esta tarea escrita. Presiona Enter para enviarla. Claude sigue pidiendo permiso antes de cambiar archivos.",
+  "workTerminalReady": "Claude Code esta corriendo en la terminal con esta tarea. Sigue pidiendo permiso antes de cambiar archivos.",
+  "workClipboardReady": "Claude Code no esta disponible aqui. La tarea se copio. Pegala en tu asistente.",
+  "workStepPanel": "La tarea esta escrita en Claude Code. Presiona Enter alli para enviarla.",
+  "workStepTerminal": "Claude Code esta corriendo en la terminal con esta tarea.",
+  "workStepClipboard": "La tarea se copio. Pegala en tu asistente."
 }

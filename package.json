@@ -85,6 +85,17 @@
           "default": "auto",
           "description": "Language for the Product Studio UI. 'auto' detects from VS Code."
         },
+        "productStudio.workTarget": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "claudePanel",
+            "claudeTerminal",
+            "clipboard"
+          ],
+          "default": "auto",
+          "description": "Where Work sends a task. auto uses the Claude Code panel, then the claude terminal, then the clipboard."
+        },
         "productStudio.claudePath": {
           "type": "string",
           "default": "",

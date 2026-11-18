@@ -360,6 +360,10 @@ function applyPlanStatus(ticketId, status) {
   ) {
     rHome();
   }
+  const ticket = document.getElementById('sTk');
+  if (ticket && ticket.style.display !== 'none' && aTk === ticketId && typeof rTk === 'function') {
+    rTk();
+  }
 }
 
 document.addEventListener('click', (event) => {

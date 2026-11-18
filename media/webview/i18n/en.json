@@ -228,5 +228,14 @@
   "planOutside": "That file is outside the open folder.",
   "planFileType": "Choose a markdown or text file from this folder.",
   "planSummary": "Short summary",
-  "planOpen": "Plan with AI"
+  "planOpen": "Plan with AI",
+  "work": "Work",
+  "workInClaude": "Work in Claude Code",
+  "workHint": "Opens Claude Code with this task filled in. Press Enter to send it.",
+  "workPanelReady": "Claude Code is open with this task filled in. Press Enter to send it. Claude will still ask before it changes files.",
+  "workTerminalReady": "Claude Code is running in the terminal with this task. It will still ask before it changes files.",
+  "workClipboardReady": "Claude Code is not available here. The task was copied. Paste it into your assistant.",
+  "workStepPanel": "The task is filled in in Claude Code. Press Enter there to send it.",
+  "workStepTerminal": "Claude Code is running in the terminal with this task.",
+  "workStepClipboard": "The task was copied. Paste it into your assistant."
 }

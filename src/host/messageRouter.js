@@ -14,6 +14,7 @@ const {
   clearAnthropicKey,
 } = require('./planWorkflow');
 const { AI_TOOL_NAMES } = require('./language');
+const { startTaskWork } = require('./workTarget');
 
 const TERMINAL_TEST_COMMAND = 'npm test || echo "Running tests..."';
 
@@ -48,6 +49,10 @@ async function routeMessage(msg, ctx) {
     case 'checkLocalGit': {
       const gitStat = await git.getLocalGitStatus(ctx.runFile, ctx.getWorkspaceRoot());
       ctx.postMessage({ type: 'localGitInfo', ...gitStat });
+      break;
+    }
+    case 'workOnTask': {
+      await startTaskWork(ctx, { ticketId: msg.ticketId, title: msg.title });
       break;
     }
     case 'prepareTicketBranch': {
