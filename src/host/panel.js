@@ -94,6 +94,18 @@ function createPanelController({ vscode, context, state, getLang }) {
       getTerminal(name) {
         return vscode.window.activeTerminal || vscode.window.createTerminal(name);
       },
+      createTerminal(options) {
+        return vscode.window.createTerminal(options);
+      },
+      getWorkTarget() {
+        return vscode.workspace.getConfiguration('productStudio').get('workTarget', 'auto');
+      },
+      getClaudePath() {
+        return vscode.workspace.getConfiguration('productStudio').get('claudePath', '');
+      },
+      hasClaudeExtension() {
+        return !!vscode.extensions.getExtension('anthropic.claude-code');
+      },
       platform: process.platform,
       vscode,
       getPlanContext() {
