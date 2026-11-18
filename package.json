@@ -62,6 +62,14 @@
       {
         "command": "productStudio.createTask",
         "title": "Product Studio: Create Task"
+      },
+      {
+        "command": "productStudio.setAnthropicApiKey",
+        "title": "Product Studio: Set Anthropic API Key"
+      },
+      {
+        "command": "productStudio.clearAnthropicApiKey",
+        "title": "Product Studio: Clear Anthropic API Key"
       }
     ],
     "configuration": {
@@ -76,6 +84,16 @@
           ],
           "default": "auto",
           "description": "Language for the Product Studio UI. 'auto' detects from VS Code."
+        },
+        "productStudio.claudePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional full path to the Claude Code executable. Leave empty to search PATH and the usual install locations."
+        },
+        "productStudio.anthropic.model": {
+          "type": "string",
+          "default": "claude-sonnet-4-5",
+          "description": "Anthropic model used when a saved API key is the planning provider."
         },
         "productStudio.ai.provider": {
           "type": "string",

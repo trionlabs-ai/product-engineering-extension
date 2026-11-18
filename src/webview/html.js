@@ -63,6 +63,7 @@ function renderWebviewHtml(options) {
     tasks: options.tasks || null,
     initialTicket: options.initialTicket || null,
     i18n: loadDictionaries(),
+    planWarning: options.planWarning || '',
   };
 
   const replacements = [
@@ -70,6 +71,7 @@ function renderWebviewHtml(options) {
     ['___CSS_URI___', escapeHtml(options.cssUri)],
     ['___JS_URI___', escapeHtml(options.jsUri)],
     ['___I18N_URI___', escapeHtml(options.i18nUri)],
+    ['___PLAN_URI___', escapeHtml(options.planUri || '')],
     ['___NONCE___', nonce],
     ['___LANG_ES_CLASS___', lang === 'es' ? 'active' : ''],
     ['___LANG_EN_CLASS___', lang === 'en' ? 'active' : ''],

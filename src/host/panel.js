@@ -3,10 +3,15 @@ const { runFile } = require('./process');
 const { renderWebviewHtml, createNonce } = require('../webview/html');
 const { getDetectedExts, pickDefaultAi } = require('./language');
 const { triggerAiChat } = require('./aiChat');
+const { hydratePlanIntoState } = require('./planWorkflow');
+const { text } = require('./text');
 
 function createPanelController({ vscode, context, state, getLang }) {
   let mainPanel = null;
   let uiReady = false;
+  let planContext = null;
+  let planWarning = '';
+  let planAbort = null;
 
   function detected() {
     return getDetectedExts((id) => vscode.extensions.getExtension(id));
@@ -27,7 +32,9 @@ function createPanelController({ vscode, context, state, getLang }) {
       cssUri: webview.asWebviewUri(vscode.Uri.joinPath(media, 'main.css')).toString(),
       jsUri: webview.asWebviewUri(vscode.Uri.joinPath(media, 'main.js')).toString(),
       i18nUri: webview.asWebviewUri(vscode.Uri.joinPath(media, 'shared', 'i18n.js')).toString(),
+      planUri: webview.asWebviewUri(vscode.Uri.joinPath(media, 'plan.js')).toString(),
       lang: has('lang') ? overrides.lang : getLang(),
+      planWarning: has('planWarning') ? overrides.planWarning : planWarning,
       onboarded: has('onboarded') ? overrides.onboarded : state.get('onboarded', false),
       connectedTools: has('connectedTools')
         ? overrides.connectedTools
@@ -88,13 +95,36 @@ function createPanelController({ vscode, context, state, getLang }) {
         return vscode.window.activeTerminal || vscode.window.createTerminal(name);
       },
       platform: process.platform,
+      vscode,
+      getPlanContext() {
+        return planContext;
+      },
+      setPlanContext(value) {
+        planContext = value;
+      },
+      secrets: context.secrets,
+      getProductConfig() {
+        return vscode.workspace.getConfiguration('productStudio');
+      },
+      isPlanRunning() {
+        return !!planAbort;
+      },
+      beginPlanRequest(controller) {
+        planAbort = controller;
+      },
+      endPlanRequest() {
+        planAbort = null;
+      },
+      cancelPlanRequest() {
+        if (planAbort) planAbort.abort();
+      },
       markUiReady() {
         uiReady = true;
       },
     };
   }
 
-  function openMain(ticketId) {
+  async function openMain(ticketId) {
     vscode.commands.executeCommand('workbench.action.closeSidebar');
     if (mainPanel) {
       mainPanel.reveal(vscode.ViewColumn.One);
@@ -102,6 +132,16 @@ function createPanelController({ vscode, context, state, getLang }) {
       return;
     }
     uiReady = false;
+    try {
+      const root =
+        vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders[0]
+          ? vscode.workspace.workspaceFolders[0].uri.fsPath
+          : null;
+      const hydrated = await hydratePlanIntoState(state, root);
+      planWarning = hydrated && hydrated.corrupt ? text(getLang(), 'planCorrupt') : '';
+    } catch (_) {
+      planWarning = '';
+    }
     mainPanel = vscode.window.createWebviewPanel(
       'productStudio.main',
       'Product Studio',

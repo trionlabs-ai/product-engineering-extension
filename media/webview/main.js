@@ -109,6 +109,7 @@ const defaultEpics = {};
 const defaultMilestones = {};
 
 let epics = (bootstrap.epics && Object.keys(bootstrap.epics).length > 0) ? bootstrap.epics : {};
+let planWarning = bootstrap.planWarning || '';
 let milestones = defaultMilestones;
 let selectedEpicId = null; // null = list of epics; string = tasks in that epic
 let editingEpicId = null; // null = new epic, string = editing existing epic
@@ -244,11 +245,11 @@ function saveTasks(){vsc.postMessage({type:'saveTasks',tasks})}
 
 // Screen management
 function showScr(n){
-  ['sOb','sHome','sTk','sSet','sCreate','sCreateEpic','sEnv','sAi'].forEach(id=>{
+  ['sOb','sHome','sTk','sSet','sCreate','sCreateEpic','sEnv','sAi','sPlan'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.style.display='none';
   });
-  const map={onboarding:'sOb',home:'sHome',ticket:'sTk',settings:'sSet',create:'sCreate',createEpic:'sCreateEpic',env:'sEnv',ai:'sAi'};
+  const map={onboarding:'sOb',home:'sHome',ticket:'sTk',settings:'sSet',create:'sCreate',createEpic:'sCreateEpic',env:'sEnv',ai:'sAi',plan:'sPlan'};
   if(map[n] && document.getElementById(map[n])) {
     document.getElementById(map[n]).style.display='';
   }
@@ -259,6 +260,7 @@ function showScr(n){
   if(n==='createEpic')rCreateEpic();
   if(n==='env')rEnv();
   if(n==='ai')rAi();
+  if(n==='plan' && typeof globalThis.rPlan==='function') globalThis.rPlan();
   updTop();
 }
 function updTop(){
@@ -613,6 +615,9 @@ function rHome(){
   allIds.forEach(id => ensureTaskEnrichment(tasks[id], id));
 
   let h = '<div class="ctr fi">';
+  if (planWarning) {
+    h += '<div class="card plan-error" style="margin-bottom:12px"><p class="plan-note" style="margin:0">' + planWarning + '</p></div>';
+  }
 
   if (selectedEpicId === null) {
     const epicKeys = Object.keys(epics);
@@ -628,7 +633,8 @@ function rHome(){
       h += '<h2 style="font-size:17px;font-weight:700;margin-bottom:6px">' + (L === 'es' ? 'Crea tu primera tarea o conecta tus herramientas' : 'Create your first task or connect') + '</h2>';
       h += '<p style="font-size:12px;color:var(--vscode-descriptionForeground);max-width:440px;margin:0 auto 20px;line-height:1.5">' + (L === 'es' ? 'No hay epicas ni tareas todavia. Puedes crear tu primera tarea localmente o conectar Jira y GitLab/GitHub para sincronizar tus tickets.' : 'No epics or tasks found yet. Create your first task locally or connect Jira and GitLab/GitHub to sync your tickets.') + '</p>';
       h += '<div style="display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap">';
-      h += '<button class="bp" style="width:auto;padding:7px 18px;font-size:12px" data-act="showScr" data-arg="create">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera tarea' : 'Create your first task') + '</button>';
+      h += '<button class="bp" style="width:auto;padding:7px 18px;font-size:12px" data-act="showScr" data-arg="plan">' + svgSparkle + ' ' + t('planOpen') + '</button>';
+      h += '<button class="bs" style="width:auto;padding:7px 18px;font-size:12px" data-act="showScr" data-arg="create">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera tarea' : 'Create your first task') + '</button>';
       h += '<button class="bs" style="width:auto;padding:7px 16px;font-size:12px" data-act="openCreateEpic">' + svgPlus + ' ' + (L === 'es' ? 'Crear primera epica' : 'Create first epic') + '</button>';
       h += '<button class="bs" style="width:auto;padding:7px 16px;font-size:12px" data-act="startOb"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> ' + (L === 'es' ? 'Conectar' : 'Connect') + '</button>';
       h += '</div>';
@@ -641,6 +647,7 @@ function rHome(){
       h += '<div style="font-size:12px;color:var(--vscode-descriptionForeground);margin-top:2px">' + (epicKeys.length > 0 ? (L === 'es' ? 'Selecciona una epica para ver sus tareas' : 'Select an epic to view its tasks') : (L === 'es' ? 'Tareas del espacio de trabajo' : 'Workspace tasks')) + '</div>';
       h += '</div>';
       h += '<div style="display:flex;align-items:center;gap:6px">';
+      h += '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" data-act="showScr" data-arg="plan">' + t('planOpen') + '</button>';
       h += '<button class="bs" style="width:auto;padding:6px 12px;font-size:12px" data-act="openCreateEpic">' + svgPlus + ' ' + (L === 'es' ? 'Nueva Epica' : 'New Epic') + '</button>';
       h += '<button class="bp" style="width:auto;padding:6px 14px;font-size:12px" data-act="showScr" data-arg="create">' + svgPlus + ' ' + t('newTask') + '</button>';
       h += '</div>';

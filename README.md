@@ -10,6 +10,7 @@ _Available in English and Spanish: [Ver demostración en español](https://raw.g
 
 ## Features
 
+- **Local project plan** — describe an idea, review an editable draft of epics and tasks, then save it in the project folder. No Jira or GitHub account is required. If the editor has no AI model, you can still write the plan by hand.
 - **Local & Offline Mode (No Jira/External Tool Required)** — start locally with 1 click; create Epics, stories, and manage commits directly on your machine without needing Jira or a remote Git repository.
 - **Epics & Tasks Drill-Down Navigation** — 2-level flow: browse project Epics with live completion progress, click into any Epic to view its tasks, and jump directly into the step-by-step ticket workspace.
 - **Full Epics CRUD** — create, view, edit, and delete Epics with native confirmation modals; automatically unassigns tasks safely without data loss.
@@ -54,13 +55,15 @@ Open this folder in VS Code, press **F5**, and choose **Run Product Studio Exten
 
 Open VS Code Settings (`Cmd+,` / `Ctrl+,`) and search for `Product Studio`:
 
-| Setting                        | Default  | Description                                                                                       |
-| ------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
-| `productStudio.language`       | `auto`   | UI language: `auto`, `es`, or `en`                                                                |
-| `productStudio.ai.provider`    | `Claude` | Default AI assistant (`Claude`, `GitHub Copilot`, `Antigravity`, `Continue`, `Ollama`, `ChatGPT`) |
-| `productStudio.jira.domain`    | `""`     | Jira Cloud domain (e.g. `your-company.atlassian.net`)                                             |
-| `productStudio.git.provider`   | `gitlab` | Git provider: `gitlab` or `github`                                                                |
-| `productStudio.git.repository` | `""`     | Repository path (e.g. `org/checkout-service`)                                                     |
+| Setting                         | Default             | Description                                                                                       |
+| ------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------- |
+| `productStudio.language`        | `auto`              | UI language: `auto`, `es`, or `en`                                                                |
+| `productStudio.claudePath`      | `""`                | Optional full path to the Claude Code `claude` command                                            |
+| `productStudio.anthropic.model` | `claude-sonnet-4-5` | Model used when a saved Anthropic API key plans the project                                       |
+| `productStudio.ai.provider`     | `Claude`            | Default AI assistant (`Claude`, `GitHub Copilot`, `Antigravity`, `Continue`, `Ollama`, `ChatGPT`) |
+| `productStudio.jira.domain`     | `""`                | Jira Cloud domain (e.g. `your-company.atlassian.net`)                                             |
+| `productStudio.git.provider`    | `gitlab`            | Git provider: `gitlab` or `github`                                                                |
+| `productStudio.git.repository`  | `""`                | Repository path (e.g. `org/checkout-service`)                                                     |
 
 ## Quick Start Guide
 
